@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interpolation Search — Implementation &amp; Performance</title>
+<style>
+  :root{
+    --bg:#0B1220;
+    --surface:#121B2E;
+    --surface-2:#182238;
+    --line: #253352;
+    --text:#E8ECF4;
+    --muted:#8895AC;
+    --probe:#F2A93B;   /* interpolation accent */
+    --mid:#4FD1C5;     /* binary accent */
+    --miss:#E5586A;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--sans); line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--probe); color:#1a1200; }
+
+  .wrap{ max-width:1080px; margin:0 auto; padding:0 24px; }
+
+  .eyebrow{
+    font-family:var(--mono); text-transform:uppercase; letter-spacing:.14em;
+    font-size:12px; color:var(--muted); margin:0 0 10px;
+  }
+  h1,h2,h3{ font-family:var(--sans); font-weight:700; letter-spacing:-0.01em; margin:0 0 12px; }
+  h1{ font-size:clamp(32px,5vw,52px); line-height:1.05; }
+  h2{ font-size:clamp(22px,3vw,30px); }
+  h3{ font-size:17px; margin-bottom:6px; }
+  p{ color:var(--muted); margin:0 0 14px; }
+  code, .num{ font-family:var(--mono); }
+  a{ color:var(--probe); }
+
+  header.top{
+    padding:64px 0 48px; border-bottom:1px solid var(--line);
+    background:
+      radial-gradient(600px 300px at 85% -10%, rgba(242,169,59,.10), transparent 60%),
+      radial-gradient(500px 260px at 10% -20%, rgba(79,209,197,.08), transparent 60%);
+  }
+  header.top p.lead{ color:var(--text); opacity:.8; max-width:640px; font-size:16px; }
+
+  section{ padding:56px 0; border-bottom:1px solid var(--line); }
+  section:last-of-type{ border-bottom:none; }
+
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:32px; }
+  @media (max-width:800px){ .grid2{ grid-template-columns:1fr; } }
+
+  /* ---- controls ---- */
+  .panel{
+    background:var(--surface); border:1px solid var(--line); border-radius:10px;
+    padding:20px 22px;
+  }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  label{ font-size:12px; color:var(--muted); font-family:var(--mono); text-transform:uppercase; letter-spacing:.08em; }
+  input[type="number"], select{
+    background:var(--surface-2); border:1px solid var(--line); color:var(--text);
+    padding:8px 10px; border-radius:6px; font-family:var(--mono); font-size:14px;
+    width:110px;
+  }
+  select{ width:auto; }
+  button{
+    font-family:var(--sans); font-weight:600; font-size:14px;
+    background:var(--probe); color:#1a1200; border:none; border-radius:6px;
+    padding:9px 16px; cursor:pointer; transition:transform .12s ease, box-shadow .12s ease;
+  }
+  button:hover{ box-shadow:0 0 0 3px rgba(242,169,59,.25); }
+  button:active{ transform:translateY(1px); }
+  button.secondary{
+    background:transparent; color:var(--mid); border:1px solid var(--mid);
+  }
+  button.secondary:hover{ box-shadow:0 0 0 3px rgba(79,209,197,.2); }
+  button:disabled{ opacity:.45; cursor:not-allowed; box-shadow:none; }
+  :focus-visible{ outline:2px solid var(--probe); outline-offset:2px; }
+
+  /* ---- number line viz ---- */
+  .track-label{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+  .track-label .who{ font-family:var(--mono); font-size:13px; font-weight:600; }
+  .track-label .count{ font-family:var(--mono); font-size:13px; color:var(--muted); }
+  svg.track{ width:100%; height:auto; display:block; }
+  .bar{ fill:var(--surface-2); stroke:var(--line); }
+  .bar.lo{ fill:#243350; }
+  .bar.hi{ fill:#243350; }
+  .bar.probe{ fill:var(--probe); }
+  .bar.mid{ fill:var(--mid); }
+  .bar.found{ fill:#5BD07A; }
+  .bar-text{ font-family:var(--mono); font-size:10px; fill:var(--muted); }
+  .bar-text.on{ fill:#0B1220; font-weight:700; }
+  .marker-text{ font-family:var(--mono); font-size:11px; fill:var(--text); }
+
+  .log{
+    font-family:var(--mono); font-size:12.5px; color:var(--muted);
+    background:var(--surface-2); border:1px solid var(--line); border-radius:8px;
+    padding:12px 14px; max-height:170px; overflow-y:auto; margin-top:14px;
+  }
+  .log div{ padding:2px 0; }
+  .log .hit{ color:var(--probe); }
+  .log .hit.mid-line{ color:var(--mid); }
+
+  /* ---- formula explainer ---- */
+  .steps{ counter-reset:s; }
+  .step{
+    position:relative; padding-left:44px; margin-bottom:22px;
+  }
+  .step::before{
+    counter-increment:s; content:counter(s);
+    position:absolute; left:0; top:0; width:30px; height:30px;
+    border:1px solid var(--probe); color:var(--probe);
+    border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-size:13px;
+  }
+  .formula{
+    font-family:var(--mono); font-size:15px; background:var(--surface);
+    border:1px solid var(--line); border-left:3px solid var(--probe);
+    padding:14px 16px; border-radius:6px; margin:10px 0; color:var(--text);
+    overflow-x:auto;
+  }
+  .formula .k{ color:var(--probe); }
+  .formula .m{ color:var(--mid); }
+
+  /* ---- race ---- */
+  .race-stats{ display:flex; gap:24px; margin-top:6px; flex-wrap:wrap; }
+  .stat{ font-family:var(--mono); }
+  .stat .n{ font-size:26px; font-weight:700; display:block; }
+  .stat.probe-c .n{ color:var(--probe); }
+  .stat.mid-c .n{ color:var(--mid); }
+  .stat .l{ color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.08em; }
+
+  /* ---- benchmark chart ---- */
+  .legend{ display:flex; gap:18px; font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:10px; flex-wrap:wrap;}
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .swatch{ width:10px; height:10px; border-radius:2px; display:inline-block; }
+  .swatch.probe{ background:var(--probe); }
+  .swatch.mid{ background:var(--mid); }
+  svg.chart{ width:100%; height:auto; }
+  .axis-text{ font-family:var(--mono); font-size:10px; fill:var(--muted); }
+  .grid-line{ stroke:var(--line); stroke-width:1; }
+
+  table{ width:100%; border-collapse:collapse; font-size:14px; }
+  th,td{ text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); }
+  th{ font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:600; }
+  td.num{ color:var(--text); }
+  tr td:first-child{ color:var(--text); font-weight:600; }
+
+  .note{ font-size:13px; color:var(--muted); border-left:2px solid var(--line); padding-left:12px; margin-top:16px;}
+
+  footer{ padding:36px 0 60px; }
+  footer p{ font-size:12.5px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <p class="eyebrow">Implementation &amp; Performance Analysis</p>
+    <h1>Interpolation Search</h1>
+    <p class="lead">Binary search always checks the middle. Interpolation search makes an educated <em>guess</em> — like flipping straight to "M" in a phone book instead of opening to the center. This page runs the real algorithm in your browser: try it, race it against binary search, and benchmark both.</p>
+  </div>
+</header>
+
+<section id="try">
+  <div class="wrap">
+    <p class="eyebrow">01 · Try it</p>
+    <h2>Search a sorted array</h2>
+    <p>The array below holds evenly-spaced values (interpolation search's best case). Enter a target and watch <span style="color:var(--probe)">lo</span>, <span style="color:var(--mid)">hi</span> and the calculated probe move.</p>
+
+    <div class="panel">
+      <div class="row">
+        <div>
+          <label for="arrSize">Array size</label><br>
+          <input type="number" id="arrSize" value="30" min="8" max="60">
+        </div>
+        <div>
+          <label for="target">Target value</label><br>
+          <input type="number" id="target" value="">
+        </div>
+        <div>
+          <label for="dist">Distribution</label><br>
+          <select id="dist">
+            <option value="uniform">Uniform (best case)</option>
+            <option value="skew">Skewed (hard case)</option>
+          </select>
+        </div>
+        <div style="align-self:flex-end;">
+          <button id="newArrBtn">New array</button>
+        </div>
+        <div style="align-self:flex-end;">
+          <button id="stepBtn" class="secondary">Step ▸</button>
+        </div>
+        <div style="align-self:flex-end;">
+          <button id="playBtn">Run search</button>
+        </div>
+      </div>
+
+      <div class="track-label" style="margin-top:22px;">
+        <span class="who" style="color:var(--probe);">● Interpolation search</span>
+        <span class="count" id="soloCount">0 comparisons</span>
+      </div>
+      <svg class="track" id="soloTrack" viewBox="0 0 1000 90"></svg>
+
+      <div class="log" id="soloLog"></div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <p class="eyebrow">02 · How the probe is placed</p>
+    <h2>It's just a proportion</h2>
+    <p>Think of the sorted array as a ruler. If you're searching for 87 in a range that runs from 0 to 100, you don't start in the middle — you start about 87% of the way along. That's the entire idea. Binary search ignores the values and always halves; interpolation search looks at the values and jumps proportionally.</p>
+
+    <div class="steps">
+      <div class="step">
+        <h3>Start with the same bounds as binary search</h3>
+        <p><code>lo</code> is the first index, <code>hi</code> is the last index — exactly like binary search.</p>
+      </div>
+      <div class="step">
+        <h3>Estimate a position instead of halving</h3>
+        <p>Where binary search always computes <code>mid = (lo + hi) / 2</code>, interpolation search asks "how far is my target between <code>arr[lo]</code> and <code>arr[hi]</code>, proportionally?" and places <code>pos</code> there:</p>
+        <div class="formula">pos&nbsp;=&nbsp;lo&nbsp;+&nbsp;<span class="k">⌊&nbsp;(target&nbsp;−&nbsp;arr[lo])&nbsp;×&nbsp;(hi&nbsp;−&nbsp;lo)&nbsp;/&nbsp;(arr[hi]&nbsp;−&nbsp;arr[lo])&nbsp;⌋</span></div>
+        <p>The fraction <code>(target − arr[lo]) / (arr[hi] − arr[lo])</code> is "how far across the value range the target sits" — 0 means it equals <code>arr[lo]</code>, 1 means it equals <code>arr[hi]</code>. Multiplying that fraction by the index range <code>(hi − lo)</code> converts a value-position into an index-position.</p>
+      </div>
+      <div class="step">
+        <h3>Compare and shrink the range</h3>
+        <p>Same three outcomes as binary search: if <code>arr[pos]</code> equals the target, done. If it's smaller, move <code>lo</code> to <code>pos + 1</code>. If it's larger, move <code>hi</code> to <code>pos − 1</code>. Repeat.</p>
+      </div>
+      <div class="step">
+        <h3>Why "uniform data" matters so much</h3>
+        <p>The formula assumes values are spread out roughly evenly between <code>arr[lo]</code> and <code>arr[hi]</code>. When that's true, each guess lands close to the real answer and the search finishes in roughly <code>O(log log n)</code> steps. When the data is bunched up unevenly (say, a huge outlier at one end), the proportion the formula computes stops meaning much, and performance can fall all the way to <code>O(n)</code> — a straight scan. The benchmark below shows exactly this gap.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="race">
+  <div class="wrap">
+    <p class="eyebrow">03 · A race</p>
+    <h2>Interpolation vs. binary, same array</h2>
+    <p>Same sorted array, same target, run side by side. Watch how differently each one chooses its next probe.</p>
+
+    <div class="panel">
+      <div class="row">
+        <div>
+          <label for="raceDist">Distribution</label><br>
+          <select id="raceDist">
+            <option value="uniform">Uniform (best case)</option>
+            <option value="skew">Skewed (hard case)</option>
+          </select>
+        </div>
+        <div style="align-self:flex-end;">
+          <button id="raceNewBtn">New array</button>
+        </div>
+        <div style="align-self:flex-end;">
+          <button id="raceBtn">Run race</button>
+        </div>
+      </div>
+
+      <div class="grid2" style="margin-top:22px;">
+        <div>
+          <div class="track-label"><span class="who" style="color:var(--probe);">● Interpolation</span></div>
+          <svg class="track" id="raceTrackA" viewBox="0 0 1000 90"></svg>
+        </div>
+        <div>
+          <div class="track-label"><span class="who" style="color:var(--mid);">● Binary</span></div>
+          <svg class="track" id="raceTrackB" viewBox="0 0 1000 90"></svg>
+        </div>
+      </div>
+
+      <div class="race-stats">
+        <div class="stat probe-c"><span class="n" id="raceCountA">0</span><span class="l">Interpolation comparisons</span></div>
+        <div class="stat mid-c"><span class="n" id="raceCountB">0</span><span class="l">Binary comparisons</span></div>
+        <div class="stat"><span class="n" id="raceWinner">—</span><span class="l">Fewer comparisons</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="bench">
+  <div class="wrap">
+    <p class="eyebrow">04 · Performance analysis</p>
+    <h2>Average comparisons vs. array size</h2>
+    <p>This runs both algorithms hundreds of times on freshly generated arrays of increasing size and averages the comparison count — a live benchmark, computed in your browser right now, not a canned chart.</p>
+
+    <div class="panel">
+      <div class="row">
+        <div>
+          <label for="benchDist">Distribution</label><br>
+          <select id="benchDist">
+            <option value="uniform">Uniform (best case)</option>
+            <option value="skew">Skewed (hard case)</option>
+          </select>
+        </div>
+        <div>
+          <label for="trials">Trials per size</label><br>
+          <input type="number" id="trials" value="200" min="20" max="1000">
+        </div>
+        <div style="align-self:flex-end;">
+          <button id="benchBtn">Run benchmark</button>
+        </div>
+      </div>
+
+      <svg class="chart" id="benchChart" viewBox="0 0 1000 420" style="margin-top:20px;"></svg>
+      <div class="legend">
+        <span><span class="swatch probe"></span>Interpolation search</span>
+        <span><span class="swatch mid"></span>Binary search</span>
+      </div>
+      <p class="note" id="benchNote">Run the benchmark to populate this chart. Switch to "Skewed" to see interpolation search's advantage disappear.</p>
+    </div>
+  </div>
+</section>
+
+<section id="complexity">
+  <div class="wrap">
+    <p class="eyebrow">05 · Complexity at a glance</p>
+    <h2>When to reach for which</h2>
+    <table>
+      <thead>
+        <tr><th>Algorithm</th><th>Best case</th><th>Average case (uniform data)</th><th>Worst case</th><th>Requires</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Binary search</td>
+          <td class="num">O(1)</td>
+          <td class="num">O(log n)</td>
+          <td class="num">O(log n)</td>
+          <td class="num">Sorted array</td>
+        </tr>
+        <tr>
+          <td>Interpolation search</td>
+          <td class="num">O(1)</td>
+          <td class="num">O(log log n)</td>
+          <td class="num">O(n)</td>
+          <td class="num">Sorted &amp; roughly uniform array</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="note">The headline number people quote — O(log log n) — only holds when the data is roughly uniformly distributed. It's a bet on the shape of the data, not just its order. That's the whole trade-off in one sentence.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>All searches, races, and benchmark numbers on this page are computed live by the JavaScript running in your browser — nothing is precomputed or hard-coded.</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- data generation ---------------- */
+  function genUniform(n){
+    const arr = [];
+    let v = Math.floor(Math.random()*5);
+    for(let i=0;i<n;i++){
+      v += 1 + Math.floor(Math.random()*4); // roughly even steps
+      arr.push(v);
+    }
+    return arr;
+  }
+  function genSkewed(n){
+    // mostly clustered near the low end, with a long sparse tail -> breaks the uniformity assumption
+    const arr = [];
+    let v = 0;
+    for(let i=0;i<n;i++){
+      if(i < n*0.85){
+        v += 1 + Math.random()*2; // tightly clustered
+      } else {
+        v += 1 + Math.random()*400; // sudden sparse tail
+      }
+      arr.push(Math.floor(v));
+    }
+    return arr;
+  }
+  function genArray(n, dist){
+    const a = dist==="skew" ? genSkewed(n) : genUniform(n);
+    // ensure strictly increasing (dedupe)
+    for(let i=1;i<a.length;i++){ if(a[i] <= a[i-1]) a[i] = a[i-1]+1; }
+    return a;
+  }
+
+  /* ---------------- algorithms with step tracing ---------------- */
+  function interpolationSearchTraced(arr, target){
+    const steps = [];
+    let lo = 0, hi = arr.length-1, comparisons = 0;
+    while(lo <= hi && target >= arr[lo] && target <= arr[hi]){
+      let pos;
+      if(arr[hi] === arr[lo]){
+        pos = lo;
+      } else {
+        pos = lo + Math.floor((target - arr[lo]) * (hi - lo) / (arr[hi] - arr[lo]));
+      }
+      pos = Math.max(lo, Math.min(hi, pos));
+      comparisons++;
+      steps.push({lo, hi, pos, val: arr[pos], comparisons});
+      if(arr[pos] === target){
+        steps[steps.length-1].found = true;
+        return {steps, found:true, comparisons};
+      } else if(arr[pos] < target){
+        lo = pos+1;
+      } else {
+        hi = pos-1;
+      }
+    }
+    return {steps, found:false, comparisons};
+  }
+
+  function binarySearchTraced(arr, target){
+    const steps = [];
+    let lo = 0, hi = arr.length-1, comparisons = 0;
+    while(lo <= hi){
+      const pos = Math.floor((lo+hi)/2);
+      comparisons++;
+      steps.push({lo, hi, pos, val: arr[pos], comparisons});
+      if(arr[pos] === target){
+        steps[steps.length-1].found = true;
+        return {steps, found:true, comparisons};
+      } else if(arr[pos] < target){
+        lo = pos+1;
+      } else {
+        hi = pos-1;
+      }
+    }
+    return {steps, found:false, comparisons};
+  }
+
+  /* ---------------- SVG rendering of a single frame ---------------- */
+  function renderTrack(svgEl, arr, frame, kind){
+    // kind: "probe" (amber) or "mid" (teal)
+    svgEl.innerHTML = "";
+    const n = arr.length;
+    const W = 1000, H = 90, padTop = 14, barH = 34;
+    const bw = W / n;
+    const ns = "http://www.w3.org/2000/svg";
+
+    for(let i=0;i<n;i++){
+      const rect = document.createElementNS(ns,"rect");
+      rect.setAttribute("x", i*bw+1);
+      rect.setAttribute("y", padTop);
+      rect.setAttribute("width", Math.max(bw-2,1));
+      rect.setAttribute("height", barH);
+      rect.setAttribute("rx", 2);
+      let cls = "bar";
+      if(frame){
+        if(frame.found && i===frame.pos) cls += " found";
+        else if(i===frame.pos) cls += (kind==="mid" ? " mid" : " probe");
+        else if(i===frame.lo || i===frame.hi) cls += " lo";
+        else if(i<frame.lo || i>frame.hi) cls += ""; // eliminated, stays neutral but dim below
+      }
+      rect.setAttribute("class", cls);
+      if(frame && (i<frame.lo || i>frame.hi)) rect.setAttribute("opacity","0.28");
+      svgEl.appendChild(rect);
+    }
+
+    // markers row (lo / probe/mid / hi labels)
+    if(frame){
+      const markers = [
+        {i:frame.lo, label:"lo", y: padTop+barH+16},
+        {i:frame.hi, label:"hi", y: padTop+barH+16},
+        {i:frame.pos, label: kind==="mid" ? "mid" : "pos", y: padTop-4}
+      ];
+      markers.forEach(m=>{
+        const t = document.createElementNS(ns,"text");
+        t.setAttribute("x", m.i*bw + bw/2);
+        t.setAttribute("y", m.y);
+        t.setAttribute("text-anchor","middle");
+        t.setAttribute("class","marker-text");
+        t.textContent = m.label;
+        svgEl.appendChild(t);
+      });
+    }
+  }
+
+  /* ================= SECTION 1: try it ================= */
+  let soloArr = genArray(30, "uniform");
+  let soloResult = null, soloStepIdx = -1;
+
+  const arrSizeEl = document.getElementById("arrSize");
+  const distEl = document.getElementById("dist");
+  const targetEl = document.getElementById("target");
+  const soloTrack = document.getElementById("soloTrack");
+  const soloLog = document.getElementById("soloLog");
+  const soloCount = document.getElementById("soloCount");
+
+  function pickTargetFrom(arr){
+    return arr[Math.floor(Math.random()*arr.length)];
+  }
+
+  function newSoloArray(){
+    const n = Math.max(8, Math.min(60, parseInt(arrSizeEl.value)||30));
+    soloArr = genArray(n, distEl.value);
+    targetEl.value = pickTargetFrom(soloArr);
+    soloResult = null; soloStepIdx = -1;
+    renderTrack(soloTrack, soloArr, null, "probe");
+    soloLog.innerHTML = "";
+    soloCount.textContent = "0 comparisons";
+  }
+
+  function runSolo(target){
+    soloResult = interpolationSearchTraced(soloArr, target);
+    soloStepIdx = -1;
+    soloLog.innerHTML = "";
+    soloCount.textContent = "0 comparisons";
+    renderTrack(soloTrack, soloArr, null, "probe");
+  }
+
+  function soloStep(){
+    if(!soloResult){
+      const t = parseFloat(targetEl.value);
+      runSolo(isNaN(t) ? pickTargetFrom(soloArr) : t);
+    }
+    if(soloStepIdx >= soloResult.steps.length-1) return;
+    soloStepIdx++;
+    const f = soloResult.steps[soloStepIdx];
+    renderTrack(soloTrack, soloArr, f, "probe");
+    soloCount.textContent = f.comparisons + (f.comparisons===1?" comparison":" comparisons");
+    const line = document.createElement("div");
+    if(f.found){
+      line.className = "hit";
+      line.textContent = "#"+f.comparisons+"  pos="+f.pos+"  arr[pos]="+f.val+"  → found";
+    } else {
+      const dir = f.val < parseFloat(targetEl.value) ? "arr[pos] < target → search right" : "arr[pos] > target → search left";
+      line.textContent = "#"+f.comparisons+"  pos="+f.pos+"  arr[pos]="+f.val+"  → "+dir;
+    }
+    soloLog.appendChild(line);
+    soloLog.scrollTop = soloLog.scrollHeight;
+    if(soloStepIdx === soloResult.steps.length-1 && !f.found){
+      const end = document.createElement("div");
+      end.textContent = "target not in array — search space exhausted";
+      soloLog.appendChild(end);
+    }
+  }
+
+  async function soloPlay(){
+    const t = parseFloat(targetEl.value);
+    runSolo(isNaN(t) ? pickTargetFrom(soloArr) : t);
+    while(soloResult && soloStepIdx < soloResult.steps.length-1){
+      soloStep();
+      await new Promise(r=>setTimeout(r, 550));
+    }
+  }
+
+  document.getElementById("newArrBtn").addEventListener("click", newSoloArray);
+  document.getElementById("stepBtn").addEventListener("click", soloStep);
+  document.getElementById("playBtn").addEventListener("click", soloPlay);
+  newSoloArray();
+
+  /* ================= SECTION 2: race ================= */
+  let raceArr = genArray(24, "uniform");
+  const raceTrackA = document.getElementById("raceTrackA");
+  const raceTrackB = document.getElementById("raceTrackB");
+  const raceCountA = document.getElementById("raceCountA");
+  const raceCountB = document.getElementById("raceCountB");
+  const raceWinner = document.getElementById("raceWinner");
+  const raceDist = document.getElementById("raceDist");
+
+  function newRaceArray(){
+    const n = 24;
+    raceArr = genArray(n, raceDist.value);
+    renderTrack(raceTrackA, raceArr, null, "probe");
+    renderTrack(raceTrackB, raceArr, null, "mid");
+    raceCountA.textContent = "0";
+    raceCountB.textContent = "0";
+    raceWinner.textContent = "—";
+  }
+
+  async function runRace(){
+    const target = pickTargetFrom(raceArr);
+    const rA = interpolationSearchTraced(raceArr, target);
+    const rB = binarySearchTraced(raceArr, target);
+    const maxLen = Math.max(rA.steps.length, rB.steps.length);
+    renderTrack(raceTrackA, raceArr, null, "probe");
+    renderTrack(raceTrackB, raceArr, null, "mid");
+    raceCountA.textContent = "0"; raceCountB.textContent = "0"; raceWinner.textContent = "—";
+
+    for(let i=0;i<maxLen;i++){
+      if(i < rA.steps.length){
+        renderTrack(raceTrackA, raceArr, rA.steps[i], "probe");
+        raceCountA.textContent = rA.steps[i].comparisons;
+      }
+      if(i < rB.steps.length){
+        renderTrack(raceTrackB, raceArr, rB.steps[i], "mid");
+        raceCountB.textContent = rB.steps[i].comparisons;
+      }
+      await new Promise(r=>setTimeout(r, 550));
+    }
+    if(rA.comparisons < rB.comparisons) raceWinner.textContent = "Interpolation";
+    else if(rB.comparisons < rA.comparisons) raceWinner.textContent = "Binary";
+    else raceWinner.textContent = "Tie";
+  }
+
+  document.getElementById("raceNewBtn").addEventListener("click", newRaceArray);
+  document.getElementById("raceBtn").addEventListener("click", runRace);
+  newRaceArray();
+
+  /* ================= SECTION 3: benchmark ================= */
+  const benchDist = document.getElementById("benchDist");
+  const trialsEl = document.getElementById("trials");
+  const benchChart = document.getElementById("benchChart");
+  const benchNote = document.getElementById("benchNote");
+  const sizes = [50, 200, 1000, 5000, 20000, 80000];
+
+  function runBenchmark(){
+    const dist = benchDist.value;
+    const trials = Math.max(20, Math.min(1000, parseInt(trialsEl.value)||200));
+    const resultsA = [], resultsB = [];
+
+    sizes.forEach(n=>{
+      let sumA=0, sumB=0;
+      for(let t=0;t<trials;t++){
+        const arr = genArray(n, dist);
+        const target = arr[Math.floor(Math.random()*arr.length)];
+        sumA += interpolationSearchTraced(arr, target).comparisons;
+        sumB += binarySearchTraced(arr, target).comparisons;
+      }
+      resultsA.push(sumA/trials);
+      resultsB.push(sumB/trials);
+    });
+
+    drawChart(resultsA, resultsB);
+    const speedup = (resultsB[resultsB.length-1] / resultsA[resultsA.length-1]).toFixed(1);
+    if(dist === "uniform"){
+      benchNote.textContent = "At n = " + sizes[sizes.length-1].toLocaleString() + ", interpolation search used about " + speedup + "× fewer comparisons than binary search — the O(log log n) advantage in action.";
+    } else {
+      benchNote.textContent = "With skewed data, interpolation search's advantage shrinks or vanishes — sometimes it needs as many comparisons as binary search, or more, because its position estimates are frequently wrong.";
+    }
+  }
+
+  function drawChart(a, b){
+    const ns = "http://www.w3.org/2000/svg";
+    benchChart.innerHTML = "";
+    const W=1000, H=420, padL=54, padR=20, padT=20, padB=50;
+    const plotW = W-padL-padR, plotH = H-padT-padB;
+    const maxY = Math.max(...a, ...b) * 1.15;
+
+    // gridlines + y labels
+    const gridSteps = 5;
+    for(let g=0; g<=gridSteps; g++){
+      const y = padT + plotH - (g/gridSteps)*plotH;
+      const line = document.createElementNS(ns,"line");
+      line.setAttribute("x1",padL); line.setAttribute("x2", W-padR);
+      line.setAttribute("y1",y); line.setAttribute("y2",y);
+      line.setAttribute("class","grid-line");
+      benchChart.appendChild(line);
+      const label = document.createElementNS(ns,"text");
+      label.setAttribute("x", padL-8); label.setAttribute("y", y+4);
+      label.setAttribute("text-anchor","end"); label.setAttribute("class","axis-text");
+      label.textContent = Math.round((g/gridSteps)*maxY);
+      benchChart.appendChild(label);
+    }
+
+    const xStep = plotW / (sizes.length-1);
+    function xFor(i){ return padL + i*xStep; }
+    function yFor(v){ return padT + plotH - (v/maxY)*plotH; }
+
+    function drawLine(data, color){
+      let d = "";
+      data.forEach((v,i)=>{
+        const x = xFor(i), y = yFor(v);
+        d += (i===0? "M":"L") + x + "," + y + " ";
+      });
+      const path = document.createElementNS(ns,"path");
+      path.setAttribute("d", d.trim());
+      path.setAttribute("fill","none");
+      path.setAttribute("stroke", color);
+      path.setAttribute("stroke-width","2.5");
+      benchChart.appendChild(path);
+      data.forEach((v,i)=>{
+        const c = document.createElementNS(ns,"circle");
+        c.setAttribute("cx", xFor(i)); c.setAttribute("cy", yFor(v)); c.setAttribute("r","4");
+        c.setAttribute("fill", color);
+        benchChart.appendChild(c);
+        const t = document.createElementNS(ns,"text");
+        t.setAttribute("x", xFor(i)); t.setAttribute("y", yFor(v)-10);
+        t.setAttribute("text-anchor","middle"); t.setAttribute("class","axis-text");
+        t.setAttribute("fill", color);
+        t.textContent = Math.round(v);
+        benchChart.appendChild(t);
+      });
+    }
+
+    drawLine(a, "var(--probe)".replace("var(--probe)", getComputedStyle(document.documentElement).getPropertyValue('--probe').trim() || "#F2A93B"));
+    drawLine(b, getComputedStyle(document.documentElement).getPropertyValue('--mid').trim() || "#4FD1C5");
+
+    // x labels
+    sizes.forEach((n,i)=>{
+      const t = document.createElementNS(ns,"text");
+      t.setAttribute("x", xFor(i)); t.setAttribute("y", H-padB+22);
+      t.setAttribute("text-anchor","middle"); t.setAttribute("class","axis-text");
+      t.textContent = "n="+n.toLocaleString();
+      benchChart.appendChild(t);
+    });
+    const axisLabel = document.createElementNS(ns,"text");
+    axisLabel.setAttribute("x", padL); axisLabel.setAttribute("y", 14);
+    axisLabel.setAttribute("class","axis-text");
+    axisLabel.textContent = "avg comparisons";
+    benchChart.appendChild(axisLabel);
+  }
+
+  document.getElementById("benchBtn").addEventListener("click", runBenchmark);
+
+})();
+</script>
+</body>
+</html>
