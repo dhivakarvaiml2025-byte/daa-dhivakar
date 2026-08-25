@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Naive vs. Rabin&ndash;Karp vs. KMP — A String Matching Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#10151b;
+    --surface:#1b232c;
+    --surface-2:#232d38;
+    --surface-3: #2b3542;
+    --text:#e9e4d8;
+    --text-dim:#93a0ac;
+    --text-faint:#5d6a76;
+    --rule: rgba(233,228,216,0.12);
+    --rule-strong: rgba(233,228,216,0.22);
+    --gold:#d9a94e;
+    --gold-soft: rgba(217,169,78,0.16);
+    --red:#c1554a;
+    --red-soft: rgba(193,85,74,0.16);
+    --teal:#5ca79a;
+    --teal-soft: rgba(92,167,154,0.16);
+    --radius: 10px;
+    --serif: "Fraunces", Georgia, serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  }
+
+  *{ box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+  body{
+    margin:0;
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(217,169,78,0.08), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 0%, rgba(92,167,154,0.06), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--gold-soft); color:var(--text); }
+  a{ color:inherit; }
+
+  .wrap{ max-width:1080px; margin:0 auto; padding:0 28px; }
+
+  h1,h2,h3{ font-family:var(--serif); font-weight:600; margin:0; color:#f4f0e6; }
+  .eyebrow{
+    font-family:var(--mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--gold); margin:0 0 14px;
+  }
+  .eyebrow::before{ content:"// "; color:var(--text-faint); }
+
+  section{ padding:88px 0; border-bottom:1px solid var(--rule); }
+  section:last-of-type{ border-bottom:none; }
+
+  /* ---------- HERO ---------- */
+  .hero{ padding-top:96px; padding-bottom:70px; }
+  .hero h1{ font-size:clamp(34px,5vw,56px); line-height:1.08; letter-spacing:-.01em; max-width:820px; }
+  .hero h1 em{ font-style:italic; color:var(--gold); }
+  .hero p.lede{
+    font-size:18px; color:var(--text-dim); max-width:600px; margin:22px 0 0;
+  }
+  .hero-meta{
+    display:flex; gap:28px; margin-top:36px; flex-wrap:wrap;
+    font-family:var(--mono); font-size:12.5px; color:var(--text-faint);
+  }
+  .hero-meta span b{ color:var(--text-dim); font-weight:500; }
+
+  .marquee{
+    margin-top:56px; border:1px solid var(--rule); border-radius:var(--radius);
+    background:var(--surface); overflow:hidden; padding:22px 0;
+  }
+  .marquee-label{
+    font-family:var(--mono); font-size:11px; color:var(--text-faint);
+    padding:0 24px 14px; letter-spacing:.08em; text-transform:uppercase;
+  }
+  .marquee-track{
+    display:flex; gap:6px; padding:0 24px; font-family:var(--mono); font-size:20px;
+    white-space:nowrap; overflow:hidden;
+  }
+  .m-char{
+    width:1ch; text-align:center; color:var(--text-faint); transition:color .15s, transform .15s;
+    position:relative;
+  }
+  .m-char.hit{ color:var(--gold); }
+  .m-pat-row{ display:flex; gap:6px; padding:6px 24px 0; font-family:var(--mono); font-size:20px; white-space:nowrap; }
+  .m-pchar{ width:1ch; text-align:center; color:var(--text-faint); opacity:0; transition:opacity .15s, color .15s; }
+  .m-pchar.on{ opacity:1; }
+  .m-pchar.hit{ color:var(--teal); }
+
+  /* ---------- CARDS (algorithm intros) ---------- */
+  .cards{ display:grid; grid-template-columns:repeat(3,1fr); gap:22px; margin-top:36px; }
+  .card{
+    background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius);
+    padding:26px 24px; position:relative; overflow:hidden;
+  }
+  .card::before{
+    content:""; position:absolute; top:0; left:0; right:0; height:3px;
+  }
+  .card.naive::before{ background:var(--red); }
+  .card.rk::before{ background:var(--gold); }
+  .card.kmp::before{ background:var(--teal); }
+  .card .tag{ font-family:var(--mono); font-size:11px; color:var(--text-faint); letter-spacing:.08em; text-transform:uppercase; }
+  .card h3{ font-size:21px; margin:8px 0 12px; }
+  .card p{ color:var(--text-dim); font-size:14.5px; margin:0 0 14px; }
+  .card .stat-row{ display:flex; gap:14px; font-family:var(--mono); font-size:12px; color:var(--text-faint); border-top:1px solid var(--rule); padding-top:12px; }
+  .card .stat-row b{ display:block; color:var(--text); font-size:14px; font-weight:500; }
+
+  /* ---------- LAB ---------- */
+  .lab-head{ display:flex; justify-content:space-between; align-items:flex-end; gap:20px; flex-wrap:wrap; }
+  .lab-head p{ color:var(--text-dim); max-width:520px; font-size:15px; margin:14px 0 0; }
+
+  .inputs{
+    display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:32px;
+  }
+  .field{ display:flex; flex-direction:column; gap:8px; }
+  .field label{ font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-faint); }
+  .field input{
+    background:var(--surface); border:1px solid var(--rule-strong); color:var(--text);
+    font-family:var(--mono); font-size:15px; padding:11px 14px; border-radius:8px; outline:none;
+    transition:border-color .15s;
+  }
+  .field input:focus{ border-color:var(--gold); }
+  .field .err{ font-size:12px; color:var(--red); font-family:var(--mono); min-height:14px; }
+
+  .algo-tabs{ display:flex; gap:8px; margin-top:22px; flex-wrap:wrap; }
+  .algo-tab{
+    font-family:var(--mono); font-size:13px; padding:10px 16px; border-radius:8px;
+    border:1px solid var(--rule-strong); background:transparent; color:var(--text-dim);
+    cursor:pointer; transition:all .15s; display:flex; align-items:center; gap:8px;
+  }
+  .algo-tab .dot{ width:8px; height:8px; border-radius:50%; }
+  .algo-tab[data-algo="naive"] .dot{ background:var(--red); }
+  .algo-tab[data-algo="rk"] .dot{ background:var(--gold); }
+  .algo-tab[data-algo="kmp"] .dot{ background:var(--teal); }
+  .algo-tab.active{ color:var(--text); border-color:var(--rule-strong); background:var(--surface-2); }
+
+  .lps-strip{
+    margin-top:18px; font-family:var(--mono); font-size:12px; color:var(--text-faint);
+    background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:10px 14px;
+    display:none;
+  }
+  .lps-strip.show{ display:block; }
+  .lps-strip b{ color:var(--teal); font-weight:500; }
+
+  .viz{
+    margin-top:22px; background:var(--surface); border:1px solid var(--rule); border-radius:var(--radius);
+    padding:26px 24px 22px; overflow-x:auto;
+  }
+  .viz-rows{ min-width:max-content; }
+  .idx-row, .text-row, .pat-row{ display:flex; gap:4px; }
+  .idx-row{ font-family:var(--mono); font-size:10px; color:var(--text-faint); margin-bottom:4px; }
+  .idx-row span{ width:30px; text-align:center; }
+  .cell{
+    width:30px; height:36px; display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-size:16px; border-radius:5px; border:1px solid transparent;
+    background:var(--surface-2); color:var(--text-dim); flex-shrink:0; transition:all .12s;
+    position:relative;
+  }
+  .text-row{ margin-bottom:6px; }
+  .cell.matched{ background:var(--gold-soft); color:var(--gold); box-shadow:inset 0 -3px 0 var(--gold); }
+  .cell.cmp-match{ background:var(--teal-soft); border-color:var(--teal); color:var(--teal); transform:translateY(-2px); }
+  .cell.cmp-mismatch{ background:var(--red-soft); border-color:var(--red); color:var(--red); transform:translateY(-2px); }
+  .pat-track{ position:relative; height:36px; }
+  .pat-row{ position:absolute; top:0; left:0; transition:left .28s cubic-bezier(.4,0,.2,1); }
+  .pat-row .cell{ background:var(--surface-3); }
+
+  .viz-message{
+    margin-top:18px; font-family:var(--mono); font-size:13px; color:var(--text-dim);
+    background:var(--surface-2); border-left:2px solid var(--gold); padding:10px 14px; border-radius:0 6px 6px 0;
+    min-height:18px;
+  }
+
+  .stats-bar{ display:flex; gap:26px; margin-top:16px; flex-wrap:wrap; }
+  .stats-bar .stat{ font-family:var(--mono); font-size:12px; color:var(--text-faint); }
+  .stats-bar .stat b{ display:block; font-size:20px; color:var(--text); font-weight:500; font-family:var(--sans); }
+
+  .controls{ display:flex; align-items:center; gap:10px; margin-top:22px; flex-wrap:wrap; }
+  .ctrl-btn{
+    font-family:var(--mono); font-size:13px; padding:9px 14px; border-radius:7px;
+    border:1px solid var(--rule-strong); background:var(--surface-2); color:var(--text);
+    cursor:pointer; transition:all .15s;
+  }
+  .ctrl-btn:hover{ border-color:var(--gold); }
+  .ctrl-btn:disabled{ opacity:.35; cursor:not-allowed; }
+  .ctrl-btn.primary{ background:var(--gold); color:#1a1408; border-color:var(--gold); font-weight:600; }
+  .scrubber{ flex:1; min-width:160px; accent-color:var(--gold); }
+  .speed-label{ font-family:var(--mono); font-size:11px; color:var(--text-faint); }
+
+  /* ---------- CHART ---------- */
+  .chart-wrap{ margin-top:56px; }
+  .chart-wrap h3{ font-size:18px; margin-bottom:4px; }
+  .chart-wrap p.note{ color:var(--text-faint); font-size:13px; margin:0 0 24px; font-family:var(--mono); }
+  .bars{ display:flex; gap:36px; align-items:flex-end; height:200px; padding:0 8px; }
+  .bar-col{ flex:1; display:flex; flex-direction:column; align-items:center; gap:10px; height:100%; justify-content:flex-end; }
+  .bar{ width:100%; max-width:90px; border-radius:6px 6px 0 0; transition:height .5s cubic-bezier(.4,0,.2,1); min-height:2px; position:relative; }
+  .bar.naive{ background:linear-gradient(180deg, var(--red), rgba(193,85,74,.35)); }
+  .bar.rk{ background:linear-gradient(180deg, var(--gold), rgba(217,169,78,.35)); }
+  .bar.kmp{ background:linear-gradient(180deg, var(--teal), rgba(92,167,154,.35)); }
+  .bar-val{ font-family:var(--mono); font-size:13px; color:var(--text); margin-top:-24px; }
+  .bar-name{ font-family:var(--mono); font-size:12px; color:var(--text-faint); }
+
+  /* ---------- TABLE ---------- */
+  table.complexity{ width:100%; border-collapse:collapse; margin-top:32px; font-size:14.5px; }
+  table.complexity th, table.complexity td{
+    text-align:left; padding:14px 16px; border-bottom:1px solid var(--rule);
+  }
+  table.complexity th{
+    font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--text-faint); font-weight:500;
+  }
+  table.complexity td.algo{ font-family:var(--serif); font-size:16px; color:var(--text); }
+  table.complexity td.algo .swatch{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:9px; }
+  .sw-naive{ background:var(--red); } .sw-rk{ background:var(--gold); } .sw-kmp{ background:var(--teal); }
+  table.complexity td{ color:var(--text-dim); font-family:var(--mono); font-size:13px; }
+  table.complexity code{ color:var(--text); }
+
+  /* ---------- CODE ---------- */
+  .code-tabs{ display:flex; gap:8px; margin-top:32px; }
+  .code-panel{ display:none; margin-top:16px; }
+  .code-panel.show{ display:block; }
+  pre.code{
+    background:#0c1015; border:1px solid var(--rule); border-radius:var(--radius);
+    padding:22px 24px; overflow-x:auto; font-family:var(--mono); font-size:13.5px; line-height:1.7;
+    color:#c7cdd3;
+  }
+  pre.code .kw{ color:#d9a94e; }
+  pre.code .fn{ color:#5ca79a; }
+  pre.code .num{ color:#c1554a; }
+  pre.code .com{ color:#5d6a76; font-style:italic; }
+  pre.code .str{ color:#9fbf8f; }
+
+  /* ---------- VERDICT ---------- */
+  .verdict-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:22px; margin-top:36px; }
+  .verdict-card{ padding:22px 0 0; border-top:2px solid var(--rule-strong); }
+  .verdict-card.naive{ border-top-color:var(--red); }
+  .verdict-card.rk{ border-top-color:var(--gold); }
+  .verdict-card.kmp{ border-top-color:var(--teal); }
+  .verdict-card h4{ font-family:var(--serif); font-size:17px; margin:0 0 10px; font-weight:600; }
+  .verdict-card p{ color:var(--text-dim); font-size:14px; margin:0; }
+
+  footer{ padding:48px 0 70px; text-align:center; }
+  footer p{ font-family:var(--mono); font-size:12px; color:var(--text-faint); }
+
+  @media (max-width: 760px){
+    .cards{ grid-template-columns:1fr; }
+    .inputs{ grid-template-columns:1fr; }
+    .verdict-grid{ grid-template-columns:1fr; }
+    section{ padding:56px 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- ============ HERO ============ -->
+  <header class="hero">
+    <p class="eyebrow">string matching field notes</p>
+    <h1>Three ways to find a <em>needle</em> in a haystack of text.</h1>
+    <p class="lede">Naive scanning, Rabin&ndash;Karp hashing, and Knuth&ndash;Morris&ndash;Pratt's failure function all solve the same problem&nbsp;&mdash; they just refuse to waste the same amount of work doing it. This is a side-by-side dissection of how, and how much that difference costs.</p>
+    <div class="hero-meta">
+      <span><b>3</b> algorithms compared</span>
+      <span><b>O(nm) → O(n+m)</b> worst-case span</span>
+      <span><b>1</b> interactive lab below</span>
+    </div>
+
+    <div class="marquee">
+      <div class="marquee-label">pattern sliding over text, in real time</div>
+      <div class="m-pat-row" id="marqueePat"></div>
+      <div class="marquee-track" id="marqueeText"></div>
+    </div>
+  </header>
+
+  <!-- ============ ALGORITHM CARDS ============ -->
+  <section class="intro">
+    <p class="eyebrow">the contenders</p>
+    <h2 style="font-size:28px;">Same job, three different instincts.</h2>
+    <div class="cards">
+      <div class="card naive">
+        <p class="tag">Brute force</p>
+        <h3>Naive Search</h3>
+        <p>Try every alignment. At each one, compare characters left to right until a mismatch, then slide the pattern one step and try again. No memory of what was already learned.</p>
+        <div class="stat-row"><div>Worst case<b>O(n·m)</b></div><div>Space<b>O(1)</b></div></div>
+      </div>
+      <div class="card rk">
+        <p class="tag">Fingerprinting</p>
+        <h3>Rabin&ndash;Karp</h3>
+        <p>Hash the pattern once, then slide a rolling hash across the text in O(1) per step. Only fall back to a real character check when two hashes happen to collide.</p>
+        <div class="stat-row"><div>Worst case<b>O(n·m)</b></div><div>Average<b>O(n+m)</b></div></div>
+      </div>
+      <div class="card kmp">
+        <p class="tag">Self-aware</p>
+        <h3>Knuth&ndash;Morris&ndash;Pratt</h3>
+        <p>Pre-analyze the pattern for its own repeated prefixes (the "failure function"), so after a mismatch it never re-examines a text character it already matched.</p>
+        <div class="stat-row"><div>Worst case<b>O(n+m)</b></div><div>Space<b>O(m)</b></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LAB ============ -->
+  <section class="lab">
+    <div class="lab-head">
+      <div>
+        <p class="eyebrow">the lab</p>
+        <h2 style="font-size:28px;">Step through the search yourself.</h2>
+      </div>
+    </div>
+    <p style="color:var(--text-dim); max-width:560px; margin-top:14px; font-size:15px;">Type any text and pattern, pick an algorithm, then step forward one comparison at a time. Gold marks a confirmed match, teal marks a live character match, red marks a mismatch.</p>
+
+    <div class="inputs">
+      <div class="field">
+        <label for="textInput">Text (haystack)</label>
+        <input id="textInput" type="text" value="ABABDABACDABABCABABCABAB" spellcheck="false">
+        <div class="err" id="textErr"></div>
+      </div>
+      <div class="field">
+        <label for="patInput">Pattern (needle)</label>
+        <input id="patInput" type="text" value="ABABCABAB" spellcheck="false">
+        <div class="err" id="patErr"></div>
+      </div>
+    </div>
+
+    <div class="algo-tabs">
+      <button class="algo-tab active" data-algo="naive"><span class="dot"></span>Naive</button>
+      <button class="algo-tab" data-algo="rk"><span class="dot"></span>Rabin&ndash;Karp</button>
+      <button class="algo-tab" data-algo="kmp"><span class="dot"></span>Knuth&ndash;Morris&ndash;Pratt</button>
+    </div>
+
+    <div class="lps-strip" id="lpsStrip"></div>
+
+    <div class="viz">
+      <div class="viz-rows">
+        <div class="idx-row" id="idxRow"></div>
+        <div class="text-row" id="textRow"></div>
+        <div class="pat-track"><div class="pat-row" id="patRow"></div></div>
+      </div>
+      <div class="viz-message" id="vizMessage">Press play or step forward to begin.</div>
+      <div class="stats-bar">
+        <div class="stat" id="statComparisons">Character comparisons<b>0</b></div>
+        <div class="stat" id="statShifts">Shifts tried<b>0</b></div>
+        <div class="stat" id="statMatches">Matches found<b>0</b></div>
+        <div class="stat" id="statHash" style="display:none;">Rolling hash<b>&mdash;</b></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="ctrl-btn" id="btnReset">⟲ Reset</button>
+      <button class="ctrl-btn" id="btnPrev">◂ Prev</button>
+      <button class="ctrl-btn primary" id="btnPlay">▶ Play</button>
+      <button class="ctrl-btn" id="btnNext">Next ▸</button>
+      <input type="range" class="scrubber" id="scrubber" min="0" max="0" value="0">
+      <span class="speed-label">Speed</span>
+      <input type="range" id="speed" min="1" max="4" value="2" style="width:80px; accent-color:var(--gold);">
+    </div>
+
+    <div class="chart-wrap">
+      <h3>Total character comparisons for this input</h3>
+      <p class="note">Computed instantly across all three algorithms on the text and pattern above &mdash; no need to press play.</p>
+      <div class="bars">
+        <div class="bar-col">
+          <div class="bar-val" id="barValNaive">0</div>
+          <div class="bar naive" id="barNaive" style="height:0%;"></div>
+          <div class="bar-name">Naive</div>
+        </div>
+        <div class="bar-col">
+          <div class="bar-val" id="barValRk">0</div>
+          <div class="bar rk" id="barRk" style="height:0%;"></div>
+          <div class="bar-name">Rabin&ndash;Karp</div>
+        </div>
+        <div class="bar-col">
+          <div class="bar-val" id="barValKmp">0</div>
+          <div class="bar kmp" id="barKmp" style="height:0%;"></div>
+          <div class="bar-name">KMP</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ COMPLEXITY TABLE ============ -->
+  <section class="complexity-section">
+    <p class="eyebrow">the numbers</p>
+    <h2 style="font-size:28px;">Complexity, side by side.</h2>
+    <table class="complexity">
+      <thead>
+        <tr><th>Algorithm</th><th>Best case</th><th>Average case</th><th>Worst case</th><th>Space</th><th>Preprocessing</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="algo"><span class="swatch sw-naive"></span>Naive</td>
+          <td><code>O(n)</code></td>
+          <td><code>O(n·m)</code></td>
+          <td><code>O(n·m)</code></td>
+          <td><code>O(1)</code></td>
+          <td>none</td>
+        </tr>
+        <tr>
+          <td class="algo"><span class="swatch sw-rk"></span>Rabin&ndash;Karp</td>
+          <td><code>O(n+m)</code></td>
+          <td><code>O(n+m)</code></td>
+          <td><code>O(n·m)</code></td>
+          <td><code>O(1)</code></td>
+          <td><code>O(m)</code> hash</td>
+        </tr>
+        <tr>
+          <td class="algo"><span class="swatch sw-kmp"></span>KMP</td>
+          <td><code>O(n)</code></td>
+          <td><code>O(n+m)</code></td>
+          <td><code>O(n+m)</code></td>
+          <td><code>O(m)</code></td>
+          <td><code>O(m)</code> LPS array</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="color:var(--text-faint); font-family:var(--mono); font-size:12.5px; margin-top:18px;">n = length of text, m = length of pattern. Rabin&ndash;Karp's worst case only shows up under pathological hash collisions &mdash; in practice it behaves close to its average case.</p>
+  </section>
+
+  <!-- ============ CODE ============ -->
+  <section class="code-section">
+    <p class="eyebrow">the implementations</p>
+    <h2 style="font-size:28px;">Read the logic, not just the Big-O.</h2>
+    <div class="code-tabs">
+      <button class="algo-tab active" data-code="naive"><span class="dot" style="background:var(--red);"></span>Naive</button>
+      <button class="algo-tab" data-code="rk"><span class="dot" style="background:var(--gold);"></span>Rabin&ndash;Karp</button>
+      <button class="algo-tab" data-code="kmp"><span class="dot" style="background:var(--teal);"></span>KMP</button>
+    </div>
+
+    <div class="code-panel show" id="code-naive"><pre class="code"><span class="kw">function</span> <span class="fn">naiveSearch</span>(text, pattern) {
+  <span class="kw">const</span> n = text.length, m = pattern.length;
+  <span class="kw">const</span> matches = [];
+
+  <span class="kw">for</span> (<span class="kw">let</span> s = <span class="num">0</span>; s &lt;= n - m; s++) {      <span class="com">// every possible alignment</span>
+    <span class="kw">let</span> j = <span class="num">0</span>;
+    <span class="kw">while</span> (j &lt; m &amp;&amp; text[s + j] === pattern[j]) {
+      j++;
+    }
+    <span class="kw">if</span> (j === m) matches.push(s);       <span class="com">// full pattern matched</span>
+  }
+  <span class="kw">return</span> matches;
+}</pre></div>
+
+    <div class="code-panel" id="code-rk"><pre class="code"><span class="kw">function</span> <span class="fn">rabinKarp</span>(text, pattern) {
+  <span class="kw">const</span> n = text.length, m = pattern.length;
+  <span class="kw">const</span> d = <span class="num">256</span>, q = <span class="num">101</span>;      <span class="com">// base and a prime modulus</span>
+  <span class="kw">const</span> matches = [];
+  <span class="kw">let</span> h = <span class="num">1</span>;
+  <span class="kw">for</span> (<span class="kw">let</span> i = <span class="num">0</span>; i &lt; m - <span class="num">1</span>; i++) h = (h * d) % q;
+
+  <span class="kw">let</span> patHash = <span class="num">0</span>, textHash = <span class="num">0</span>;
+  <span class="kw">for</span> (<span class="kw">let</span> i = <span class="num">0</span>; i &lt; m; i++) {
+    patHash  = (d * patHash  + pattern.charCodeAt(i)) % q;
+    textHash = (d * textHash + text.charCodeAt(i))    % q;
+  }
+
+  <span class="kw">for</span> (<span class="kw">let</span> s = <span class="num">0</span>; s &lt;= n - m; s++) {
+    <span class="kw">if</span> (patHash === textHash) {          <span class="com">// cheap filter</span>
+      <span class="kw">if</span> (text.slice(s, s + m) === pattern) matches.push(s);
+    }
+    <span class="kw">if</span> (s &lt; n - m) {                   <span class="com">// roll the hash forward, O(1)</span>
+      textHash = (d * (textHash - text.charCodeAt(s) * h)
+                    + text.charCodeAt(s + m)) % q;
+      <span class="kw">if</span> (textHash &lt; <span class="num">0</span>) textHash += q;
+    }
+  }
+  <span class="kw">return</span> matches;
+}</pre></div>
+
+    <div class="code-panel" id="code-kmp"><pre class="code"><span class="kw">function</span> <span class="fn">computeLPS</span>(pattern) {
+  <span class="kw">const</span> m = pattern.length;
+  <span class="kw">const</span> lps = <span class="kw">new</span> Array(m).fill(<span class="num">0</span>);
+  <span class="kw">let</span> len = <span class="num">0</span>, i = <span class="num">1</span>;
+  <span class="kw">while</span> (i &lt; m) {
+    <span class="kw">if</span> (pattern[i] === pattern[len]) { lps[i++] = ++len; }
+    <span class="kw">else if</span> (len !== <span class="num">0</span>) { len = lps[len - <span class="num">1</span>]; }   <span class="com">// fall back, don't retreat i</span>
+    <span class="kw">else</span> { lps[i++] = <span class="num">0</span>; }
+  }
+  <span class="kw">return</span> lps;
+}
+
+<span class="kw">function</span> <span class="fn">kmpSearch</span>(text, pattern) {
+  <span class="kw">const</span> n = text.length, m = pattern.length;
+  <span class="kw">const</span> lps = computeLPS(pattern);
+  <span class="kw">const</span> matches = [];
+  <span class="kw">let</span> i = <span class="num">0</span>, j = <span class="num">0</span>;
+
+  <span class="kw">while</span> (i &lt; n) {
+    <span class="kw">if</span> (text[i] === pattern[j]) { i++; j++; }
+    <span class="kw">if</span> (j === m) { matches.push(i - j); j = lps[j - <span class="num">1</span>]; }
+    <span class="kw">else if</span> (i &lt; n &amp;&amp; text[i] !== pattern[j]) {
+      j !== <span class="num">0</span> ? j = lps[j - <span class="num">1</span>] : i++;   <span class="com">// text pointer i never rewinds</span>
+    }
+  }
+  <span class="kw">return</span> matches;
+}</pre></div>
+  </section>
+
+  <!-- ============ VERDICT ============ -->
+  <section class="verdict-section">
+    <p class="eyebrow">the verdict</p>
+    <h2 style="font-size:28px;">So which one should you reach for?</h2>
+    <div class="verdict-grid">
+      <div class="verdict-card naive">
+        <h4>Reach for Naive when&hellip;</h4>
+        <p>The text is short, the code needs to be obviously correct, or this runs once. Its simplicity is the whole feature &mdash; no preprocessing, nothing to get wrong.</p>
+      </div>
+      <div class="verdict-card rk">
+        <h4>Reach for Rabin&ndash;Karp when&hellip;</h4>
+        <p>You're searching for many patterns at once, or matching whole substrings/documents, where comparing hashes is far cheaper than comparing raw text (plagiarism and duplicate-content detection lean on this).</p>
+      </div>
+      <div class="verdict-card kmp">
+        <h4>Reach for KMP when&hellip;</h4>
+        <p>Worst-case guarantees matter &mdash; streaming data, adversarial input, or a single long-lived pattern searched repeatedly, where linear time can't be negotiated away.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>A comparative walkthrough of Naive, Rabin&ndash;Karp, and Knuth&ndash;Morris&ndash;Pratt string matching &middot; built as a self-contained HTML project</p>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ================= algorithm core ================= */
+  function computeLPS(pattern){
+    const m = pattern.length;
+    const lps = new Array(m).fill(0);
+    let len_ = 0, i = 1;
+    while(i < m){
+      if(pattern[i] === pattern[len_]){
+        len_++; lps[i] = len_; i++;
+      } else if(len_ !== 0){
+        len_ = lps[len_-1];
+      } else {
+        lps[i] = 0; i++;
+      }
+    }
+    return lps;
+  }
+
+  function naiveFrames(text, pattern){
+    const n=text.length, m=pattern.length, frames=[];
+    let comparisons=0, shiftsCount=0; const matches=[];
+    for(let s=0; s<=n-m; s++){
+      shiftsCount++;
+      frames.push({offset:s, cmp:null, res:null, comparisons, shifts:shiftsCount, matches:matches.slice(),
+        message:`Aligning pattern at text index ${s}.`});
+      let mismatchAt=-1;
+      for(let j=0;j<m;j++){
+        comparisons++;
+        const match = text[s+j]===pattern[j];
+        frames.push({offset:s, cmp:{t:s+j,p:j}, res: match?'match':'mismatch', comparisons, shifts:shiftsCount, matches:matches.slice(),
+          message: match ? `text[${s+j}] = pattern[${j}] ('${text[s+j]}') — keep going.`
+                         : `text[${s+j}] ('${text[s+j]}') ≠ pattern[${j}] ('${pattern[j]}') — mismatch. Slide pattern forward by exactly 1.`});
+        if(!match){ mismatchAt=j; break; }
+      }
+      if(mismatchAt===-1){
+        matches.push(s);
+        frames.push({offset:s, cmp:null, res:'found', comparisons, shifts:shiftsCount, matches:matches.slice(),
+          message:`Full match confirmed at index ${s}.`});
+      }
+    }
+    frames.push({offset:Math.max(0,n-m), cmp:null, res:null, comparisons, shifts:shiftsCount, matches:matches.slice(),
+      message:`Done. ${matches.length} match(es), ${comparisons} character comparisons, ${shiftsCount} shift(s) tried.`});
+    return frames;
+  }
+
+  function rkFrames(text, pattern){
+    const n=text.length, m=pattern.length, frames=[];
+    let comparisons=0, hashChecks=0; const matches=[];
+    const d=256, q=101;
+    let h=1; for(let i=0;i<m-1;i++) h=(h*d)%q;
+    let patHash=0, textHash=0;
+    for(let i=0;i<m;i++){ patHash=(d*patHash+pattern.charCodeAt(i))%q; textHash=(d*textHash+text.charCodeAt(i))%q; }
+    for(let s=0; s<=n-m; s++){
+      hashChecks++;
+      const hashMatch = patHash===textHash;
+      frames.push({offset:s, cmp:null, res:null, comparisons, shifts:hashChecks, matches:matches.slice(),
+        hashText:textHash, hashPat:patHash, hashMatch,
+        message: hashMatch ? `Hash match at index ${s} (${textHash} = ${patHash}). Verifying characters to rule out a collision…`
+                            : `Hash mismatch at index ${s} (${textHash} ≠ ${patHash}). Skip — no character comparison needed.`});
+      if(hashMatch){
+        let allMatch=true;
+        for(let j=0;j<m;j++){
+          comparisons++;
+          const match = text[s+j]===pattern[j];
+          frames.push({offset:s, cmp:{t:s+j,p:j}, res: match?'match':'mismatch', comparisons, shifts:hashChecks, matches:matches.slice(),
+            hashText:textHash, hashPat:patHash, hashMatch:true,
+            message: match ? `Character check: text[${s+j}] = pattern[${j}].`
+                            : `Character check failed — a spurious hit (hash collision), not a real match.`});
+          if(!match){ allMatch=false; break; }
+        }
+        if(allMatch){
+          matches.push(s);
+          frames.push({offset:s, cmp:null, res:'found', comparisons, shifts:hashChecks, matches:matches.slice(),
+            hashText:textHash, hashPat:patHash, hashMatch:true, message:`Confirmed real match at index ${s}.`});
+        }
+      }
+      if(s < n-m){
+        textHash = (d*(textHash - text.charCodeAt(s)*h) + text.charCodeAt(s+m)) % q;
+        textHash = ((textHash % q) + q) % q;
+      }
+    }
+    frames.push({offset:Math.max(0,n-m), cmp:null, res:null, comparisons, shifts:hashChecks, matches:matches.slice(),
+      hashText:null, hashPat:patHash, hashMatch:null,
+      message:`Done. ${matches.length} match(es), ${comparisons} character comparisons, ${hashChecks} hash check(s).`});
+    return frames;
+  }
+
+  function kmpFrames(text, pattern){
+    const n=text.length, m=pattern.length;
+    const lps = computeLPS(pattern);
+    const frames=[]; let comparisons=0, shiftsFail=0; const matches=[];
+    let i=0, j=0;
+    frames.push({offset:0, cmp:null, res:null, comparisons, shifts:shiftsFail, matches:matches.slice(),
+      message:`Failure function (LPS) built for the pattern: [${lps.join(', ')}]. Starting the scan.`});
+    while(i<n){
+      comparisons++;
+      const match = text[i]===pattern[j];
+      frames.push({offset:i-j, cmp:{t:i,p:j}, res: match?'match':'mismatch', comparisons, shifts:shiftsFail, matches:matches.slice(),
+        message: match ? `text[${i}] = pattern[${j}] — advance both pointers.`
+                        : `text[${i}] ('${text[i]}') ≠ pattern[${j}] ('${pattern[j]}') — mismatch.`});
+      if(match){
+        i++; j++;
+        if(j===m){
+          matches.push(i-j);
+          frames.push({offset:i-j, cmp:null, res:'found', comparisons, shifts:shiftsFail, matches:matches.slice(),
+            message:`Full match confirmed at index ${i-j}.`});
+          j = lps[j-1];
+          frames.push({offset:i-j, cmp:null, res:null, comparisons, shifts:shiftsFail, matches:matches.slice(),
+            message:`Resume at pattern index ${j} using the failure function — text is never re-scanned.`});
+        }
+      } else if(j!==0){
+        shiftsFail++;
+        const newJ = lps[j-1];
+        frames.push({offset:i-newJ, cmp:null, res:null, comparisons, shifts:shiftsFail, matches:matches.slice(),
+          message:`Failure function: fall back pattern index from ${j} to ${newJ}. Text pointer i stays put.`});
+        j = newJ;
+      } else {
+        i++;
+        frames.push({offset:i-j, cmp:null, res:null, comparisons, shifts:shiftsFail, matches:matches.slice(),
+          message:`Pattern index already at 0 — advance the text pointer.`});
+      }
+    }
+    frames.push({offset:Math.max(0,n-m), cmp:null, res:null, comparisons, shifts:shiftsFail, matches:matches.slice(),
+      message:`Done. ${matches.length} match(es), ${comparisons} character comparisons, ${shiftsFail} failure-function jump(s).`,
+      lps});
+    frames.lps = lps;
+    return frames;
+  }
+
+  /* ================= state ================= */
+  const state = { algo:'naive', frames:[], idx:0, playing:false, timer:null, text:'', pattern:'' };
+  const CELL = 34; // px, matches CSS cell width(30) + gap(4)
+
+  const els = {
+    textInput: document.getElementById('textInput'),
+    patInput: document.getElementById('patInput'),
+    textErr: document.getElementById('textErr'),
+    patErr: document.getElementById('patErr'),
+    idxRow: document.getElementById('idxRow'),
+    textRow: document.getElementById('textRow'),
+    patRow: document.getElementById('patRow'),
+    vizMessage: document.getElementById('vizMessage'),
+    statComparisons: document.getElementById('statComparisons').querySelector('b'),
+    statShifts: document.getElementById('statShifts'),
+    statShiftsB: document.getElementById('statShifts').querySelector('b'),
+    statMatches: document.getElementById('statMatches').querySelector('b'),
+    statHash: document.getElementById('statHash'),
+    statHashB: document.getElementById('statHash').querySelector('b'),
+    scrubber: document.getElementById('scrubber'),
+    btnPlay: document.getElementById('btnPlay'),
+    btnPrev: document.getElementById('btnPrev'),
+    btnNext: document.getElementById('btnNext'),
+    btnReset: document.getElementById('btnReset'),
+    speed: document.getElementById('speed'),
+    lpsStrip: document.getElementById('lpsStrip'),
+  };
+
+  function validate(){
+    const text = els.textInput.value;
+    const pattern = els.patInput.value;
+    els.textErr.textContent=''; els.patErr.textContent='';
+    if(pattern.length===0){ els.patErr.textContent='Pattern cannot be empty.'; return null; }
+    if(text.length===0){ els.textErr.textContent='Text cannot be empty.'; return null; }
+    if(pattern.length>text.length){ els.patErr.textContent='Pattern cannot be longer than text.'; return null; }
+    return {text, pattern};
+  }
+
+  function buildRows(text, pattern){
+    els.idxRow.innerHTML = text.split('').map((_,i)=>`<span>${i}</span>`).join('');
+    els.textRow.innerHTML = text.split('').map((c,i)=>`<div class="cell" data-i="${i}">${c===' '?'&middot;':c}</div>`).join('');
+    els.patRow.innerHTML = pattern.split('').map((c,j)=>`<div class="cell" data-j="${j}">${c===' '?'&middot;':c}</div>`).join('');
+    els.patRow.style.left = '0px';
+  }
+
+  function renderFrame(){
+    const f = state.frames[state.idx];
+    if(!f) return;
+    // reset text cells
+    const textCells = els.textRow.querySelectorAll('.cell');
+    textCells.forEach(c=>{ c.classList.remove('cmp-match','cmp-mismatch','matched'); });
+    // matched ranges
+    f.matches.forEach(startIdx=>{
+      for(let k=0;k<state.pattern.length;k++){
+        const cell = textCells[startIdx+k];
+        if(cell) cell.classList.add('matched');
+      }
+    });
+    // active comparison
+    const patCells = els.patRow.querySelectorAll('.cell');
+    patCells.forEach(c=>c.classList.remove('cmp-match','cmp-mismatch'));
+    if(f.cmp){
+      const tc = textCells[f.cmp.t], pc = patCells[f.cmp.p];
+      const cls = f.res==='match' ? 'cmp-match' : 'cmp-mismatch';
+      if(tc) tc.classList.add(cls);
+      if(pc) pc.classList.add(cls);
+    }
+    // pattern position
+    els.patRow.style.left = (f.offset * CELL) + 'px';
+    // message + stats
+    els.vizMessage.textContent = f.message;
+    els.statComparisons.textContent = f.comparisons;
+    els.statMatches.textContent = f.matches.length;
+    if(state.algo==='rk'){
+      els.statShifts.querySelector('b').parentNode.firstChild.textContent = 'Hash checks';
+      els.statShiftsB.textContent = f.shifts;
+      els.statHash.style.display='block';
+      els.statHashB.textContent = (f.hashText===null||f.hashText===undefined) ? '—' : `${f.hashText} vs ${f.hashPat}${f.hashMatch? ' (match)':''}`;
+    } else {
+      els.statHash.style.display='none';
+      if(state.algo==='kmp'){
+        els.statShiftsB.parentNode.firstChild.textContent = 'Failure jumps';
+      } else {
+        els.statShiftsB.parentNode.firstChild.textContent = 'Shifts tried';
+      }
+      els.statShiftsB.textContent = f.shifts;
+    }
+    els.scrubber.value = state.idx;
+    updateButtons();
+  }
+
+  function updateButtons(){
+    els.btnPrev.disabled = state.idx<=0;
+    els.btnNext.disabled = state.idx>=state.frames.length-1;
+  }
+
+  function rebuild(){
+    stopPlay();
+    const v = validate();
+    if(!v) { state.frames=[]; els.textRow.innerHTML=''; els.patRow.innerHTML=''; els.idxRow.innerHTML=''; return; }
+    state.text = v.text; state.pattern = v.pattern;
+    buildRows(state.text, state.pattern);
+
+    if(state.algo==='naive') state.frames = naiveFrames(state.text, state.pattern);
+    else if(state.algo==='rk') state.frames = rkFrames(state.text, state.pattern);
+    else state.frames = kmpFrames(state.text, state.pattern);
+
+    state.idx = 0;
+    els.scrubber.max = Math.max(0, state.frames.length-1);
+    els.scrubber.value = 0;
+
+    if(state.algo==='kmp'){
+      const lps = computeLPS(state.pattern);
+      els.lpsStrip.innerHTML = `Failure function (LPS) for <b>${state.pattern}</b>: [ ${lps.join(', ')} ] — each value is how far to fall back, not how far to jump ahead.`;
+      els.lpsStrip.classList.add('show');
+    } else {
+      els.lpsStrip.classList.remove('show');
+    }
+
+    renderFrame();
+    updateChart();
+  }
+
+  function step(delta){
+    stopPlay();
+    state.idx = Math.max(0, Math.min(state.frames.length-1, state.idx+delta));
+    renderFrame();
+  }
+
+  function stopPlay(){
+    state.playing=false;
+    clearInterval(state.timer);
+    els.btnPlay.textContent='▶ Play';
+  }
+
+  function togglePlay(){
+    if(state.playing){ stopPlay(); return; }
+    if(state.idx>=state.frames.length-1) state.idx=0;
+    state.playing=true;
+    els.btnPlay.textContent='⏸ Pause';
+    const speedMap = {1:900, 2:550, 3:320, 4:150};
+    const tick = ()=>{
+      if(state.idx>=state.frames.length-1){ stopPlay(); return; }
+      state.idx++;
+      renderFrame();
+    };
+    state.timer = setInterval(tick, speedMap[els.speed.value]||550);
+  }
+
+  /* ================= chart ================= */
+  function updateChart(){
+    const v = validate();
+    if(!v){ return; }
+    const nF = naiveFrames(v.text, v.pattern);
+    const rF = rkFrames(v.text, v.pattern);
+    const kF = kmpFrames(v.text, v.pattern);
+    const nC = nF[nF.length-1].comparisons;
+    const rC = rF[rF.length-1].comparisons;
+    const kC = kF[kF.length-1].comparisons;
+    const max = Math.max(nC, rC, kC, 1);
+    document.getElementById('barNaive').style.height = (6+ (nC/max)*88) + '%';
+    document.getElementById('barRk').style.height = (6+ (rC/max)*88) + '%';
+    document.getElementById('barKmp').style.height = (6+ (kC/max)*88) + '%';
+    document.getElementById('barValNaive').textContent = nC;
+    document.getElementById('barValRk').textContent = rC;
+    document.getElementById('barValKmp').textContent = kC;
+  }
+
+  /* ================= wiring ================= */
+  document.querySelectorAll('.algo-tabs .algo-tab').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.algo-tabs .algo-tab').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      state.algo = btn.dataset.algo;
+      rebuild();
+    });
+  });
+
+  document.querySelectorAll('.code-tabs .algo-tab').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.code-tabs .algo-tab').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.code-panel').forEach(p=>p.classList.remove('show'));
+      document.getElementById('code-'+btn.dataset.code).classList.add('show');
+    });
+  });
+
+  els.textInput.addEventListener('input', rebuild);
+  els.patInput.addEventListener('input', rebuild);
+  els.btnPrev.addEventListener('click', ()=>step(-1));
+  els.btnNext.addEventListener('click', ()=>step(1));
+  els.btnReset.addEventListener('click', ()=>{ stopPlay(); state.idx=0; renderFrame(); });
+  els.btnPlay.addEventListener('click', togglePlay);
+  els.scrubber.addEventListener('input', ()=>{ stopPlay(); state.idx=parseInt(els.scrubber.value,10); renderFrame(); });
+
+  rebuild();
+
+  /* ================= hero marquee ambient animation ================= */
+  (function marquee(){
+    const text = "THISISASTRINGMATCHINGDEMO";
+    const pattern = "MATCH";
+    const textEl = document.getElementById('marqueeText');
+    const patEl = document.getElementById('marqueePat');
+    textEl.innerHTML = text.split('').map(c=>`<span class="m-char">${c}</span>`).join('');
+    patEl.innerHTML = pattern.split('').map(c=>`<span class="m-pchar">${c}</span>`).join('');
+    const textSpans = textEl.querySelectorAll('.m-char');
+    const patSpans = patEl.querySelectorAll('.m-pchar');
+    let s = 0;
+    const maxS = text.length - pattern.length;
+    function tick(){
+      textSpans.forEach(sp=>sp.classList.remove('hit'));
+      patSpans.forEach(sp=>{ sp.classList.remove('on','hit'); });
+      let allMatch = true;
+      for(let k=0;k<pattern.length;k++){
+        const match = text[s+k]===pattern[k];
+        patSpans[k].classList.add('on');
+        if(match){ textSpans[s+k].classList.add('hit'); patSpans[k].classList.add('hit'); }
+        else { allMatch=false; }
+      }
+      patEl.style.marginLeft = (s*26)+'px';
+      s = (s>=maxS) ? 0 : s+1;
+    }
+    tick();
+    setInterval(tick, 550);
+  })();
+})();
+</script>
+
+</body>
+</html>
