@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pathfinder — Dijkstra's Shortest Path Visualizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #090d16;
+    --bg-grid: rgba(94,234,212,0.05);
+    --panel: #111726;
+    --panel-2: #0d1220;
+    --border: rgba(148,163,184,0.14);
+    --text: #e6ecf5;
+    --text-muted: #7c8aa0;
+    --cyan: #22d3ee;
+    --amber: #fbbf24;
+    --coral: #fb7185;
+    --violet: #a78bfa;
+    --edge: #2b3648;
+    --edge-glow: rgba(251,191,36,0.55);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 15% 10%, rgba(34,211,238,0.06), transparent 40%),
+      radial-gradient(circle at 85% 90%, rgba(167,139,250,0.06), transparent 40%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Inter', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{ max-width:1280px; margin:0 auto; padding:28px 24px 60px; }
+
+  header{ display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:22px; border-bottom:1px solid var(--border); padding-bottom:18px; }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand-mark{ width:38px; height:38px; border-radius:9px; background:linear-gradient(135deg, var(--cyan), var(--violet)); display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-weight:700; color:#0a0e17; font-size:16px; flex-shrink:0; }
+  h1{ font-family:'Space Grotesk',sans-serif; font-size:22px; margin:0; letter-spacing:0.2px; }
+  .sub{ color:var(--text-muted); font-size:13px; margin-top:2px; font-family:'JetBrains Mono',monospace; }
+  .complexity-badge{ font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--text-muted); border:1px solid var(--border); padding:6px 10px; border-radius:6px; background:var(--panel-2); }
+  .complexity-badge b{ color:var(--cyan); font-weight:600; }
+
+  .toolbar{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:16px; }
+  .btn{ font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:600; color:var(--text); background:var(--panel); border:1px solid var(--border); padding:9px 14px; border-radius:7px; cursor:pointer; transition:all .15s ease; display:flex; align-items:center; gap:6px; }
+  .btn:hover{ border-color:rgba(148,163,184,0.35); background:#161d30; }
+  .btn.active{ background:rgba(34,211,238,0.12); border-color:var(--cyan); color:var(--cyan); }
+  .btn.primary{ background:linear-gradient(135deg, rgba(34,211,238,0.18), rgba(167,139,250,0.18)); border-color:rgba(34,211,238,0.4); }
+  .btn:disabled{ opacity:0.35; cursor:not-allowed; }
+  .btn.small{ padding:7px 10px; font-size:12px; }
+  .sep{ width:1px; align-self:stretch; background:var(--border); margin:0 4px; }
+  .speed-wrap{ display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--text-muted); margin-left:auto; }
+  input[type=range]{ accent-color:var(--cyan); width:100px; }
+
+  .layout{ display:flex; gap:18px; align-items:flex-start; }
+  .canvas-panel{ position:relative; flex:1 1 62%; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px; min-width:0; }
+  .canvas-panel svg{ width:100%; height:auto; display:block; border-radius:8px; background:
+      linear-gradient(var(--bg-grid) 1px, transparent 1px) 0 0/26px 26px,
+      linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px) 0 0/26px 26px,
+      var(--panel-2);
+    cursor:crosshair; }
+  .canvas-panel.mode-view svg{ cursor:pointer; }
+
+  .hint-bar{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--text-muted); flex-wrap:wrap; gap:8px; }
+  .legend{ display:flex; gap:14px; flex-wrap:wrap; }
+  .legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+
+  .side{ flex:1 1 38%; display:flex; flex-direction:column; gap:14px; min-width:280px; }
+  .card{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+  .card h2{ font-family:'Space Grotesk',sans-serif; font-size:13px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); margin:0 0 10px; }
+
+  table{ width:100%; border-collapse:collapse; font-family:'JetBrains Mono',monospace; font-size:12.5px; }
+  th{ text-align:left; color:var(--text-muted); font-weight:500; padding:5px 6px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; }
+  td{ padding:6px 6px; border-bottom:1px solid rgba(148,163,184,0.06); }
+  tr.current-row td{ background:rgba(251,191,36,0.08); color:var(--amber); }
+  tr.visited-row td{ color:var(--cyan); }
+  .status-pill{ font-size:10.5px; padding:2px 7px; border-radius:20px; border:1px solid var(--border); }
+  .status-visited{ color:var(--cyan); border-color:rgba(34,211,238,0.4); }
+  .status-frontier{ color:var(--amber); border-color:rgba(251,191,36,0.4); }
+  .status-unvisited{ color:var(--text-muted); }
+
+  #log{ font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.6; max-height:230px; overflow-y:auto; padding-right:4px; }
+  #log::-webkit-scrollbar{ width:6px; }
+  #log::-webkit-scrollbar-thumb{ background:var(--border); border-radius:3px; }
+  .log-line{ color:var(--text-muted); padding:2px 0; }
+  .log-line.latest{ color:var(--amber); font-weight:600; }
+  .log-line .arrow{ color:var(--cyan); margin-right:5px; }
+
+  .path-info{ font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--text-muted); line-height:1.7; }
+  .path-info b{ color:var(--coral); }
+
+  .weight-modal{ position:absolute; z-index:20; background:var(--panel-2); border:1px solid var(--cyan); border-radius:10px; padding:14px; box-shadow:0 10px 30px rgba(0,0,0,0.5); left:50%; top:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; gap:10px; min-width:200px; }
+  .weight-modal label{ font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--text-muted); }
+  .weight-modal input{ background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:8px; font-family:'JetBrains Mono',monospace; font-size:14px; width:100%; }
+  .weight-modal .row{ display:flex; gap:8px; }
+
+  footer{ margin-top:26px; text-align:center; color:var(--text-muted); font-size:11.5px; font-family:'JetBrains Mono',monospace; }
+
+  @media (max-width: 880px){
+    .layout{ flex-direction:column; }
+    .side{ min-width:0; }
+  }
+
+  @keyframes flow{ to{ stroke-dashoffset:-24; } }
+  .pulse-edge{ stroke-dasharray:6 6; animation:flow 0.6s linear infinite; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="brand-mark">λ</div>
+      <div>
+        <h1>Pathfinder</h1>
+        <div class="sub">single-source shortest path · dijkstra's algorithm</div>
+      </div>
+    </div>
+    <div class="complexity-badge">O((V+E) log V) &nbsp;·&nbsp; greedy relaxation over a <b>min-priority queue</b></div>
+  </header>
+
+  <div class="toolbar">
+    <button class="btn" id="modeNode">＋ Add Node</button>
+    <button class="btn" id="modeEdge">／ Add Edge</button>
+    <button class="btn" id="modeSource">◎ Set Source</button>
+    <div class="sep"></div>
+    <button class="btn small" id="loadSample">Load Sample Graph</button>
+    <button class="btn small" id="clearAll">Clear All</button>
+    <div class="sep"></div>
+    <button class="btn primary" id="stepBtn" disabled>Step ▶</button>
+    <button class="btn" id="playBtn" disabled>Play ▶▶</button>
+    <button class="btn small" id="restartAlgo" disabled>↻ Recompute</button>
+    <div class="speed-wrap">
+      <span>speed</span>
+      <input type="range" id="speed" min="150" max="1400" value="650">
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="canvas-panel mode-view" id="canvasPanel">
+      <svg id="graph" viewBox="0 0 800 460" xmlns="http://www.w3.org/2000/svg">
+        <g id="edgeLayer"></g>
+        <g id="nodeLayer"></g>
+      </svg>
+      <div class="hint-bar">
+        <div class="legend">
+          <span><i class="dot" style="background:#334155"></i> unvisited</span>
+          <span><i class="dot" style="background:var(--amber)"></i> current / frontier</span>
+          <span><i class="dot" style="background:var(--cyan)"></i> finalized</span>
+          <span><i class="dot" style="background:var(--coral)"></i> shortest path</span>
+          <span><i class="dot" style="background:var(--violet)"></i> source</span>
+        </div>
+        <div id="modeHint">click any node to reveal its shortest path from the source</div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <h2>Distance Table</h2>
+        <table>
+          <thead><tr><th>Node</th><th>Dist</th><th>Via</th><th>Status</th></tr></thead>
+          <tbody id="distTable"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>Relaxation Log</h2>
+        <div id="log"><div class="log-line">Set a source node to begin.</div></div>
+      </div>
+
+      <div class="card">
+        <h2>Shortest Path</h2>
+        <div class="path-info" id="pathInfo">No target selected yet — click a node on the graph.</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Dijkstra's algorithm finds the minimum-weight path from a single source to every reachable node in a weighted graph with non-negative edge weights.</footer>
+</div>
+
+<script>
+(function(){
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.getElementById('graph');
+  const edgeLayer = document.getElementById('edgeLayer');
+  const nodeLayer = document.getElementById('nodeLayer');
+  const canvasPanel = document.getElementById('canvasPanel');
+  const modeHint = document.getElementById('modeHint');
+
+  let nodes = [];   // {id, x, y}
+  let edges = [];   // {a, b, w}
+  let source = null;
+  let mode = 'view'; // view | node | edge | source
+  let edgeFirst = null;
+
+  let steps = [];
+  let stepIndex = -1;
+  let playTimer = null;
+
+  function svgEl(tag, attrs){
+    const el = document.createElementNS(NS, tag);
+    for(const k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+
+  function nextLabel(){
+    let i = 0;
+    while(nodes.some(n => n.id === String.fromCharCode(65+i))) i++;
+    return String.fromCharCode(65+i);
+  }
+
+  function edgeKey(a,b){ return [a,b].sort().join('-'); }
+
+  function neighborsOf(u){
+    return edges.filter(e => e.a===u || e.b===u).map(e => ({ node: e.a===u ? e.b : e.a, w:e.w }));
+  }
+
+  function loadSample(){
+    nodes = [
+      {id:'A', x:70,  y:230},
+      {id:'B', x:220, y:110},
+      {id:'C', x:220, y:350},
+      {id:'D', x:380, y:60},
+      {id:'E', x:380, y:230},
+      {id:'F', x:380, y:400},
+      {id:'G', x:560, y:140},
+      {id:'H', x:560, y:320},
+      {id:'I', x:720, y:230},
+    ];
+    edges = [
+      {a:'A',b:'B',w:4}, {a:'A',b:'C',w:2}, {a:'B',b:'C',w:1},
+      {a:'B',b:'D',w:5}, {a:'B',b:'E',w:6}, {a:'C',b:'E',w:8},
+      {a:'C',b:'F',w:9}, {a:'D',b:'E',w:3}, {a:'D',b:'G',w:5},
+      {a:'E',b:'F',w:4}, {a:'E',b:'G',w:7}, {a:'E',b:'H',w:6},
+      {a:'F',b:'H',w:3}, {a:'G',b:'H',w:2}, {a:'G',b:'I',w:4},
+      {a:'H',b:'I',w:5},
+    ];
+    source = null;
+    resetSteps();
+    renderGraph();
+    updateSidePanel();
+  }
+
+  function clearAll(){
+    nodes = []; edges = []; source = null;
+    resetSteps();
+    renderGraph();
+    updateSidePanel();
+  }
+
+  function resetSteps(){
+    steps = []; stepIndex = -1;
+    clearInterval(playTimer); playTimer = null;
+    document.getElementById('stepBtn').disabled = true;
+    document.getElementById('playBtn').disabled = true;
+    document.getElementById('restartAlgo').disabled = !source;
+    document.getElementById('playBtn').textContent = 'Play ▶▶';
+    document.getElementById('pathInfo').textContent = 'No target selected yet — click a node on the graph.';
+  }
+
+  // ---------- Dijkstra step generation ----------
+  function computeSteps(src){
+    const dist = {}, prev = {};
+    nodes.forEach(n => dist[n.id] = Infinity);
+    dist[src] = 0;
+    const visited = new Set();
+    const pq = [src];
+    const snaps = [];
+
+    function snapshot(type, extra){
+      return Object.assign({
+        type,
+        dist: Object.assign({}, dist),
+        prev: Object.assign({}, prev),
+        visited: new Set(visited),
+      }, extra || {});
+    }
+
+    snaps.push(snapshot('init', { message: `Initialize: dist[${src}] = 0, all other nodes = ∞.` }));
+
+    while(pq.length){
+      pq.sort((a,b) => dist[a]-dist[b]);
+      const u = pq.shift();
+      if(visited.has(u)) continue;
+      visited.add(u);
+      snaps.push(snapshot('visit', { current:u, message:`Visit ${u} — finalized at distance ${dist[u]}.` }));
+
+      for(const {node:v, w} of neighborsOf(u)){
+        if(visited.has(v)) continue;
+        const alt = dist[u] + w;
+        const before = dist[v] === Infinity ? '∞' : dist[v];
+        snaps.push(snapshot('consider', { current:u, edge:[u,v], message:`Check ${u}→${v} (w=${w}): ${dist[u]} + ${w} = ${alt} vs ${before}.` }));
+        if(alt < dist[v]){
+          dist[v] = alt; prev[v] = u;
+          pq.push(v);
+          snaps.push(snapshot('update', { current:u, edge:[u,v], message:`Update dist[${v}] = ${alt} (via ${u}).` }));
+        }
+      }
+    }
+    snaps.push(snapshot('done', { message:'Complete — every reachable node has its final shortest distance.' }));
+    return snaps;
+  }
+
+  function startAlgorithm(){
+    if(!source) return;
+    steps = computeSteps(source);
+    stepIndex = -1;
+    document.getElementById('stepBtn').disabled = false;
+    document.getElementById('playBtn').disabled = false;
+    document.getElementById('restartAlgo').disabled = false;
+    stepForward();
+  }
+
+  function stepForward(){
+    if(stepIndex >= steps.length-1) { clearInterval(playTimer); playTimer=null; document.getElementById('playBtn').textContent='Play ▶▶'; return; }
+    stepIndex++;
+    renderStep();
+    if(stepIndex >= steps.length-1){ clearInterval(playTimer); playTimer=null; document.getElementById('playBtn').textContent='Play ▶▶'; }
+  }
+
+  function togglePlay(){
+    const btn = document.getElementById('playBtn');
+    if(playTimer){ clearInterval(playTimer); playTimer=null; btn.textContent='Play ▶▶'; return; }
+    btn.textContent='Pause ❚❚';
+    playTimer = setInterval(stepForward, +document.getElementById('speed').value);
+  }
+
+  // ---------- Rendering ----------
+  function renderGraph(){
+    edgeLayer.innerHTML = '';
+    nodeLayer.innerHTML = '';
+
+    edges.forEach(e => {
+      const na = nodes.find(n=>n.id===e.a), nb = nodes.find(n=>n.id===e.b);
+      if(!na || !nb) return;
+      const line = svgEl('line', {
+        x1:na.x, y1:na.y, x2:nb.x, y2:nb.y,
+        stroke:'var(--edge)', 'stroke-width':2.5,
+        'data-key': edgeKey(e.a,e.b),
+      });
+      edgeLayer.appendChild(line);
+
+      const mx = (na.x+nb.x)/2, my = (na.y+nb.y)/2;
+      const bg = svgEl('rect', { x:mx-11, y:my-10, width:22, height:16, rx:4, fill:'var(--panel-2)', stroke:'var(--edge)', 'stroke-width':1 });
+      const label = svgEl('text', { x:mx, y:my+2, 'text-anchor':'middle', fill:'#a8b4c7', 'font-size':11, 'font-family':"'JetBrains Mono',monospace" });
+      label.textContent = e.w;
+      edgeLayer.appendChild(bg);
+      edgeLayer.appendChild(label);
+    });
+
+    nodes.forEach(n => {
+      const g = svgEl('g', { style:'cursor:pointer' });
+      const isSource = n.id === source;
+      const circle = svgEl('circle', {
+        cx:n.x, cy:n.y, r:22,
+        fill:'#1a2333',
+        stroke: isSource ? 'var(--violet)' : '#334155',
+        'stroke-width': isSource ? 3 : 2,
+        'data-node': n.id,
+      });
+      const text = svgEl('text', { x:n.x, y:n.y+5, 'text-anchor':'middle', fill:'var(--text)', 'font-size':15, 'font-weight':700, 'font-family':"'JetBrains Mono',monospace" });
+      text.textContent = n.id;
+      g.appendChild(circle);
+      g.appendChild(text);
+      g.addEventListener('click', (ev) => { ev.stopPropagation(); onNodeClick(n.id); });
+      nodeLayer.appendChild(g);
+    });
+  }
+
+  function renderStep(){
+    const snap = steps[stepIndex];
+    if(!snap) return;
+
+    // reset edge styles
+    edgeLayer.querySelectorAll('line').forEach(l => {
+      l.setAttribute('stroke', 'var(--edge)');
+      l.setAttribute('stroke-width', 2.5);
+      l.classList.remove('pulse-edge');
+    });
+    // reset node styles (keep source ring)
+    nodeLayer.querySelectorAll('circle').forEach(c => {
+      const id = c.getAttribute('data-node');
+      const isSource = id === source;
+      c.setAttribute('fill', '#1a2333');
+      c.setAttribute('stroke', isSource ? 'var(--violet)' : '#334155');
+      c.setAttribute('stroke-width', isSource ? 3 : 2);
+    });
+
+    // color nodes by status
+    nodes.forEach(n => {
+      const c = nodeLayer.querySelector(`circle[data-node="${n.id}"]`);
+      if(!c) return;
+      if(snap.visited.has(n.id)){
+        c.setAttribute('fill', 'rgba(34,211,238,0.18)');
+        c.setAttribute('stroke', 'var(--cyan)');
+      } else if(snap.dist[n.id] !== Infinity){
+        c.setAttribute('stroke', 'var(--amber)');
+      }
+      if(snap.current === n.id){
+        c.setAttribute('fill', 'rgba(251,191,36,0.22)');
+        c.setAttribute('stroke', 'var(--amber)');
+        c.setAttribute('stroke-width', 3.5);
+      }
+    });
+
+    // highlight edge being considered / updated
+    if(snap.edge){
+      const line = edgeLayer.querySelector(`line[data-key="${edgeKey(snap.edge[0], snap.edge[1])}"]`);
+      if(line){
+        line.setAttribute('stroke', snap.type === 'update' ? 'var(--amber)' : '#5c6b85');
+        line.setAttribute('stroke-width', 3.5);
+        if(snap.type === 'consider' || snap.type === 'update') line.classList.add('pulse-edge');
+      }
+    }
+
+    updateSidePanel();
+  }
+
+  function updateSidePanel(){
+    const tbody = document.getElementById('distTable');
+    tbody.innerHTML = '';
+    const snap = steps[stepIndex];
+
+    nodes.slice().sort((a,b)=>a.id.localeCompare(b.id)).forEach(n => {
+      const tr = document.createElement('tr');
+      let distVal = '—', viaVal = '—', statusHtml = '<span class="status-pill">—</span>';
+      if(snap){
+        const d = snap.dist[n.id];
+        distVal = d === Infinity ? '∞' : d;
+        viaVal = snap.prev[n.id] || '—';
+        if(snap.visited.has(n.id)){
+          statusHtml = '<span class="status-pill status-visited">finalized</span>';
+          tr.classList.add('visited-row');
+        } else if(d !== Infinity){
+          statusHtml = '<span class="status-pill status-frontier">frontier</span>';
+        } else {
+          statusHtml = '<span class="status-pill status-unvisited">unvisited</span>';
+        }
+        if(snap.current === n.id) tr.classList.add('current-row');
+      }
+      tr.innerHTML = `<td><b>${n.id}</b>${n.id===source?' <span style="color:var(--violet)">(src)</span>':''}</td><td>${distVal}</td><td>${viaVal}</td><td>${statusHtml}</td>`;
+      tbody.appendChild(tr);
+    });
+
+    const log = document.getElementById('log');
+    if(!snap){
+      log.innerHTML = '<div class="log-line">Set a source node to begin.</div>';
+    } else {
+      log.innerHTML = '';
+      steps.slice(0, stepIndex+1).forEach((s, i) => {
+        const line = document.createElement('div');
+        line.className = 'log-line' + (i === stepIndex ? ' latest' : '');
+        line.innerHTML = `<span class="arrow">›</span>${s.message}`;
+        log.appendChild(line);
+      });
+      log.scrollTop = log.scrollHeight;
+    }
+  }
+
+  function onNodeClick(id){
+    if(mode === 'edge'){
+      if(edgeFirst === null){
+        edgeFirst = id;
+        highlightPending(id);
+      } else if(edgeFirst !== id){
+        openWeightModal(edgeFirst, id);
+      }
+      return;
+    }
+    if(mode === 'source'){
+      source = id;
+      startAlgorithm();
+      setMode('view');
+      renderGraph();
+      renderStep();
+      return;
+    }
+    // view mode: show shortest path to this node using final computed state
+    if(steps.length){
+      showPathTo(id);
+    }
+  }
+
+  function highlightPending(id){
+    nodeLayer.querySelectorAll('circle').forEach(c => {
+      if(c.getAttribute('data-node') === id) c.setAttribute('stroke', 'var(--cyan)');
+    });
+  }
+
+  function openWeightModal(a, b){
+    const modal = document.createElement('div');
+    modal.className = 'weight-modal';
+    modal.innerHTML = `
+      <label>Edge weight — ${a} to ${b}</label>
+      <input type="number" id="weightInput" value="1" min="1" step="1">
+      <div class="row">
+        <button class="btn small" id="weightOk" style="flex:1">Add Edge</button>
+        <button class="btn small" id="weightCancel" style="flex:1">Cancel</button>
+      </div>`;
+    canvasPanel.appendChild(modal);
+    const input = modal.querySelector('#weightInput');
+    input.focus(); input.select();
+
+    function confirm(){
+      const w = Math.max(1, parseInt(input.value) || 1);
+      if(!edges.some(e => edgeKey(e.a,e.b) === edgeKey(a,b))){
+        edges.push({a, b, w});
+      }
+      cleanup();
+    }
+    function cleanup(){
+      modal.remove();
+      edgeFirst = null;
+      resetSteps();
+      renderGraph();
+      updateSidePanel();
+    }
+    modal.querySelector('#weightOk').addEventListener('click', confirm);
+    modal.querySelector('#weightCancel').addEventListener('click', cleanup);
+    input.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter') confirm();
+      if(e.key === 'Escape') cleanup();
+    });
+  }
+
+  function showPathTo(target){
+    const finalSnap = steps[steps.length-1];
+    const pathInfo = document.getElementById('pathInfo');
+    edgeLayer.querySelectorAll('line').forEach(l => {
+      // keep current relaxation highlight state from renderStep, then overlay path
+    });
+
+    if(finalSnap.dist[target] === Infinity){
+      pathInfo.innerHTML = `No path exists from <b>${source}</b> to <b>${target}</b>.`;
+      return;
+    }
+    const chain = [target];
+    let cur = target;
+    while(finalSnap.prev[cur]){
+      cur = finalSnap.prev[cur];
+      chain.unshift(cur);
+    }
+    pathInfo.innerHTML = `<b>${chain.join(' → ')}</b><br>Total distance: <b>${finalSnap.dist[target]}</b>`;
+
+    // re-render base step coloring, then overlay coral path
+    renderStep();
+    for(let i=0;i<chain.length-1;i++){
+      const line = edgeLayer.querySelector(`line[data-key="${edgeKey(chain[i], chain[i+1])}"]`);
+      if(line){
+        line.setAttribute('stroke', 'var(--coral)');
+        line.setAttribute('stroke-width', 4.5);
+        line.classList.add('pulse-edge');
+      }
+    }
+    chain.forEach(id => {
+      const c = nodeLayer.querySelector(`circle[data-node="${id}"]`);
+      if(c) c.setAttribute('stroke', 'var(--coral)');
+    });
+  }
+
+  function setMode(m){
+    mode = m; edgeFirst = null;
+    ['modeNode','modeEdge','modeSource'].forEach(id => document.getElementById(id).classList.remove('active'));
+    canvasPanel.classList.toggle('mode-view', m === 'view');
+    const hints = {
+      view: 'click any node to reveal its shortest path from the source',
+      node: 'click empty space on the canvas to place a new node',
+      edge: 'click two nodes in sequence to connect them with a weighted edge',
+      source: 'click a node to set it as the source and start the algorithm',
+    };
+    modeHint.textContent = hints[m];
+    if(m !== 'view'){
+      const map = { node:'modeNode', edge:'modeEdge', source:'modeSource' };
+      document.getElementById(map[m]).classList.add('active');
+    }
+  }
+
+  // canvas click for adding nodes
+  svg.addEventListener('click', (ev) => {
+    if(mode !== 'node') return;
+    const pt = svg.createSVGPoint();
+    pt.x = ev.clientX; pt.y = ev.clientY;
+    const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+    nodes.push({ id: nextLabel(), x: Math.round(loc.x), y: Math.round(loc.y) });
+    resetSteps();
+    source = null;
+    renderGraph();
+    updateSidePanel();
+  });
+
+  document.getElementById('modeNode').addEventListener('click', () => setMode(mode==='node' ? 'view' : 'node'));
+  document.getElementById('modeEdge').addEventListener('click', () => setMode(mode==='edge' ? 'view' : 'edge'));
+  document.getElementById('modeSource').addEventListener('click', () => setMode(mode==='source' ? 'view' : 'source'));
+  document.getElementById('loadSample').addEventListener('click', loadSample);
+  document.getElementById('clearAll').addEventListener('click', clearAll);
+  document.getElementById('stepBtn').addEventListener('click', stepForward);
+  document.getElementById('playBtn').addEventListener('click', togglePlay);
+  document.getElementById('restartAlgo').addEventListener('click', startAlgorithm);
+
+  loadSample();
+  setMode('view');
+})();
+</script>
+</body>
+</html>
