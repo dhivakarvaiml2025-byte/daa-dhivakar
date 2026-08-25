@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minimum Spanning Trees — Kruskal &amp; Prim</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0C0E13;
+    --surface: #14171F;
+    --surface-2: #1B1F2A;
+    --border: #262B3A;
+    --text: #E8E9EE;
+    --muted: #8B93A7;
+    --dim: #565E72;
+    --teal: #5FD4C0;
+    --teal-dim: rgba(95,212,192,0.14);
+    --amber: #F2A65A;
+    --amber-dim: rgba(242,166,90,0.14);
+    --rose: #E8607A;
+    --rose-dim: rgba(232,96,122,0.14);
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    background-image:
+      radial-gradient(circle at 15% 8%, rgba(95,212,192,0.05), transparent 40%),
+      radial-gradient(circle at 85% 92%, rgba(242,166,90,0.045), transparent 40%);
+  }
+  .wrap{max-width: 1040px; margin: 0 auto; padding: 0 28px;}
+
+  /* ---- nav dots ---- */
+  #navdots{
+    position: fixed; right: 22px; top: 50%; transform: translateY(-50%);
+    display:flex; flex-direction:column; gap:14px; z-index: 50;
+  }
+  #navdots a{
+    width:8px; height:8px; border-radius:50%; background: var(--border);
+    display:block; position:relative; transition: background .25s;
+  }
+  #navdots a.active{ background: var(--teal); }
+  #navdots a span{
+    position:absolute; right:18px; top:50%; transform:translateY(-50%);
+    white-space:nowrap; font-family:var(--mono); font-size:11px; color:var(--muted);
+    background:var(--surface); border:1px solid var(--border); padding:3px 8px; border-radius:4px;
+    opacity:0; pointer-events:none; transition: opacity .2s;
+  }
+  #navdots a:hover span{opacity:1;}
+  @media (max-width: 900px){ #navdots{display:none;} }
+
+  /* ---- hero ---- */
+  header.hero{
+    padding: 100px 0 70px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .eyebrow{
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--teal); display:flex; align-items:center; gap:10px; margin-bottom: 22px;
+  }
+  .eyebrow::before{content:''; width:22px; height:1px; background: var(--teal);}
+  h1.title{
+    font-family: var(--mono); font-weight: 700; font-size: clamp(32px, 5vw, 54px);
+    letter-spacing: -0.01em; line-height: 1.08; max-width: 780px;
+  }
+  h1.title em{ font-style:normal; color: var(--amber); }
+  .subtitle{
+    margin-top: 22px; max-width: 620px; color: var(--muted); font-size: 16.5px;
+  }
+  .hero-meta{
+    margin-top: 40px; display:flex; gap: 34px; flex-wrap:wrap;
+    font-family: var(--mono); font-size: 12.5px; color: var(--dim);
+  }
+  .hero-meta b{ color: var(--text); font-weight: 600; }
+
+  section{ padding: 78px 0; border-bottom: 1px solid var(--border); }
+  .kicker{
+    font-family: var(--mono); font-size: 12px; color: var(--dim); letter-spacing: 0.1em;
+    text-transform: uppercase; margin-bottom: 10px;
+  }
+  h2{
+    font-family: var(--mono); font-size: clamp(24px, 3vw, 32px); font-weight: 700;
+    margin-bottom: 18px; letter-spacing: -0.01em;
+  }
+  h3{ font-family: var(--mono); font-size: 18px; font-weight: 600; margin: 30px 0 12px; color: var(--teal); }
+  p{ color: var(--muted); max-width: 720px; margin-bottom: 14px; font-size: 15.5px;}
+  p b{ color: var(--text); font-weight: 600; }
+  .lead{ font-size: 17px; color: var(--text); max-width: 760px; }
+
+  .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 24px; }
+  @media (max-width: 800px){ .grid2{grid-template-columns:1fr;} }
+
+  .card{
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 26px;
+  }
+  .card.kruskal{ border-top: 2px solid var(--teal); }
+  .card.prim{ border-top: 2px solid var(--amber); }
+  .card h4{ font-family: var(--mono); font-size: 15px; margin-bottom: 12px; }
+  .card.kruskal h4{ color: var(--teal); }
+  .card.prim h4{ color: var(--amber); }
+  .card ul{ padding-left: 18px; color: var(--muted); font-size: 14.5px; }
+  .card li{ margin-bottom: 6px; }
+
+  /* pseudocode */
+  .code-block{
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    overflow:hidden; margin: 16px 0 8px; font-family: var(--mono); font-size: 13.2px;
+  }
+  .code-block .cb-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 9px 16px; border-bottom: 1px solid var(--border); background: var(--surface-2);
+    font-size: 11.5px; color: var(--dim); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .code-block pre{ display:flex; overflow-x:auto; }
+  .code-block .gutter{
+    padding: 14px 12px; text-align:right; color: #3B4152; user-select:none;
+    border-right: 1px solid var(--border); background: rgba(0,0,0,0.15);
+  }
+  .code-block code{ padding: 14px 18px; color: #C9CDD9; white-space:pre; }
+  .code-block .kw{ color: var(--amber); }
+  .code-block .fn{ color: var(--teal); }
+  .code-block .cm{ color: var(--dim); font-style:italic; }
+  .code-block .num{ color: #B98CE8; }
+
+  table.cmp{
+    width:100%; border-collapse: collapse; margin-top: 20px; font-size: 14.5px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow:hidden;
+  }
+  table.cmp th, table.cmp td{ padding: 13px 16px; text-align:left; border-bottom: 1px solid var(--border); }
+  table.cmp th{
+    font-family: var(--mono); font-size: 11.5px; text-transform:uppercase; letter-spacing:0.06em;
+    color: var(--dim); background: var(--surface-2);
+  }
+  table.cmp td:first-child{ color: var(--text); font-weight:600; width: 22%; }
+  table.cmp tr:last-child td{ border-bottom:none; }
+  table.cmp td.k{ color: var(--teal); }
+  table.cmp td.p{ color: var(--amber); }
+
+  /* ---- visualizer ---- */
+  .viz-shell{
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-top: 26px; overflow:hidden;
+  }
+  .viz-toolbar{
+    display:flex; align-items:center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border);
+    background: var(--surface-2); flex-wrap: wrap;
+  }
+  .btn{
+    font-family: var(--mono); font-size: 12.5px; padding: 8px 14px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    cursor:pointer; transition: all .15s; letter-spacing: 0.02em;
+  }
+  .btn:hover{ border-color: var(--teal); color: var(--teal); }
+  .btn:disabled{ opacity: 0.35; cursor: not-allowed; }
+  .btn.primary{ background: var(--teal); color: #08110F; border-color: var(--teal); font-weight:600; }
+  .btn.primary:hover{ background: #78E0CE; color:#08110F; }
+  .tabgroup{ display:flex; gap:4px; background: var(--surface); border:1px solid var(--border); border-radius:6px; padding:3px; margin-left:auto; }
+  .tabgroup button{
+    font-family: var(--mono); font-size: 12px; padding: 6px 13px; border-radius:4px; border:none;
+    background:transparent; color: var(--dim); cursor:pointer;
+  }
+  .tabgroup button.active.k{ background: var(--teal-dim); color: var(--teal); }
+  .tabgroup button.active.p{ background: var(--amber-dim); color: var(--amber); }
+
+  .viz-body{ display:grid; grid-template-columns: 1.4fr 1fr; }
+  @media (max-width: 820px){ .viz-body{grid-template-columns:1fr;} }
+  .canvas-wrap{ padding: 10px; border-right: 1px solid var(--border); }
+  @media (max-width: 820px){ .canvas-wrap{border-right:none; border-bottom:1px solid var(--border);} }
+  canvas{ width:100%; height:auto; display:block; }
+
+  .panel{ padding: 16px 18px; display:flex; flex-direction:column; min-height: 420px;}
+  .panel-stats{ display:flex; gap: 18px; margin-bottom: 14px; font-family: var(--mono); }
+  .stat{ }
+  .stat .n{ font-size: 22px; font-weight:700; color: var(--text); }
+  .stat .l{ font-size: 10.5px; color: var(--dim); text-transform:uppercase; letter-spacing:0.06em; }
+  .panel-title{ font-family: var(--mono); font-size: 11.5px; color: var(--dim); text-transform:uppercase; letter-spacing:0.07em; margin-bottom:8px; }
+  .edge-list{ font-family: var(--mono); font-size: 12.5px; overflow-y:auto; max-height: 175px; border: 1px solid var(--border); border-radius:6px; }
+  .edge-row{
+    display:flex; justify-content:space-between; padding: 6px 12px; border-bottom:1px solid var(--border); color: var(--dim);
+  }
+  .edge-row:last-child{border-bottom:none;}
+  .edge-row.accepted{ color: var(--teal); background: var(--teal-dim); }
+  .edge-row.rejected{ color: var(--rose); background: var(--rose-dim); text-decoration: line-through; }
+  .edge-row.current{ color: var(--amber); background: var(--amber-dim); }
+  .log{
+    margin-top:14px; font-family: var(--mono); font-size: 12px; color: var(--muted);
+    background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius:6px; padding: 10px 12px;
+    flex:1; overflow-y:auto; min-height: 90px;
+  }
+  .log div{ padding: 2px 0; }
+  .log .ok{ color: var(--teal); }
+  .log .no{ color: var(--rose); }
+  .log .sys{ color: var(--dim); }
+
+  footer{ padding: 46px 0 70px; }
+  footer p{ font-size: 13px; color: var(--dim); }
+  .ref-list{ margin-top: 10px; padding-left: 18px; color: var(--dim); font-size: 13.5px; }
+  .ref-list li{ margin-bottom: 6px; }
+
+  ::-webkit-scrollbar{ height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb{ background: var(--border); border-radius:4px; }
+  ::-webkit-scrollbar-track{ background: transparent; }
+</style>
+</head>
+<body>
+
+<nav id="navdots">
+  <a href="#overview"><span>Overview</span></a>
+  <a href="#kruskal"><span>Kruskal's</span></a>
+  <a href="#prim"><span>Prim's</span></a>
+  <a href="#visualizer"><span>Visualizer</span></a>
+  <a href="#comparison"><span>Comparison</span></a>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Graph Theory / Greedy Algorithms</div>
+    <h1 class="title">Minimum Spanning Trees:<br>Kruskal's <em>&amp;</em> Prim's Algorithms</h1>
+    <p class="subtitle">
+      A project on building a minimum-weight spanning tree over a connected, weighted, undirected graph —
+      two classic greedy strategies, their proofs of correctness in spirit, complexity trade-offs, and a
+      live trace you can step through edge by edge.
+    </p>
+    <div class="hero-meta">
+      <div><b>Problem</b> — Minimum Spanning Tree (MST)</div>
+      <div><b>Strategy</b> — Greedy, cut property</div>
+      <div><b>Structures</b> — Union–Find · Min-Heap</div>
+    </div>
+  </div>
+</header>
+
+<section id="overview">
+  <div class="wrap">
+    <div class="kicker">01 — Problem statement</div>
+    <h2>What is a Minimum Spanning Tree?</h2>
+    <p class="lead">
+      Given a connected, undirected, weighted graph <b>G = (V, E)</b>, a spanning tree is a subgraph
+      that connects all <b>V</b> vertices using exactly <b>V − 1</b> edges and contains no cycles.
+      A <b>minimum</b> spanning tree is the spanning tree whose total edge weight is as small as possible.
+    </p>
+    <p>
+      MSTs matter anywhere you need to connect a set of points as cheaply as possible: laying network
+      cable between offices, routing utility lines between towns, clustering data points, or approximating
+      harder problems like the Travelling Salesman Problem. Both algorithms below produce a
+      <b>guaranteed-optimal</b> MST — they differ only in <i>how</i> they grow it.
+    </p>
+    <div class="grid2">
+      <div class="card kruskal">
+        <h4>Kruskal — edge-centric</h4>
+        <ul>
+          <li>Sorts <b>all edges</b> globally by weight first</li>
+          <li>Greedily adds the cheapest edge that doesn't form a cycle</li>
+          <li>Cycle check via a <b>Union–Find</b> (disjoint-set) structure</li>
+          <li>Builds a forest that merges into one tree</li>
+        </ul>
+      </div>
+      <div class="card prim">
+        <h4>Prim — vertex-centric</h4>
+        <ul>
+          <li>Grows <b>one tree</b> outward from a start vertex</li>
+          <li>At each step, adds the cheapest edge leaving the current tree</li>
+          <li>Tracks the "frontier" via a <b>min-priority queue</b></li>
+          <li>Always maintains a single connected component</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="kruskal">
+  <div class="wrap">
+    <div class="kicker">02 — Algorithm</div>
+    <h2 style="color:var(--teal)">Kruskal's Algorithm</h2>
+    <p class="lead">
+      Sort every edge by weight, then walk the sorted list once: accept an edge if its two endpoints sit
+      in different components, and merge those components. Reject it if they're already connected — adding
+      it would create a cycle. This is a direct application of the <b>cut property</b>: the lightest edge
+      crossing any cut of the graph is safe to include in some MST.
+    </p>
+
+    <h3>Pseudocode</h3>
+    <div class="code-block">
+      <div class="cb-head"><span>kruskal.pseudo</span><span>O(E log E)</span></div>
+      <pre><span class="gutter">1
+2
+3
+4
+5
+6
+7
+8
+9
+10</span><code><span class="kw">function</span> <span class="fn">Kruskal</span>(V, E):
+    MST ← ∅
+    <span class="kw">sort</span> E <span class="kw">by</span> weight ascending
+    DSU ← MakeSet(V)               <span class="cm">// each vertex its own set</span>
+    <span class="kw">for</span> (u, v, w) <span class="kw">in</span> E:
+        <span class="kw">if</span> DSU.Find(u) ≠ DSU.Find(v):
+            MST.add((u, v, w))
+            DSU.Union(u, v)
+    <span class="kw">return</span> MST                    <span class="cm">// |MST| = |V| − 1</span></code></pre>
+    </div>
+
+    <h3>Reference implementation (JavaScript)</h3>
+    <div class="code-block">
+      <div class="cb-head"><span>kruskal.js</span><span>Union–Find w/ path compression</span></div>
+      <pre><span class="gutter">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20</span><code><span class="kw">class</span> UnionFind {
+  constructor(n) { this.p = [...Array(n).keys()]; this.rank = Array(n).fill(<span class="num">0</span>); }
+  find(x) { <span class="kw">while</span> (this.p[x] !== x) { this.p[x] = this.p[this.p[x]]; x = this.p[x]; } <span class="kw">return</span> x; }
+  union(a, b) {
+    <span class="kw">let</span> ra = this.find(a), rb = this.find(b);
+    <span class="kw">if</span> (ra === rb) <span class="kw">return</span> <span class="kw">false</span>;
+    <span class="kw">if</span> (this.rank[ra] < this.rank[rb]) [ra, rb] = [rb, ra];
+    this.p[rb] = ra;
+    <span class="kw">if</span> (this.rank[ra] === this.rank[rb]) this.rank[ra]++;
+    <span class="kw">return</span> <span class="kw">true</span>;
+  }
+}
+<span class="kw">function</span> <span class="fn">kruskal</span>(n, edges) {
+  <span class="kw">const</span> sorted = [...edges].sort((a, b) => a.w - b.w);
+  <span class="kw">const</span> dsu = <span class="kw">new</span> UnionFind(n);
+  <span class="kw">const</span> mst = [];
+  <span class="kw">for</span> (<span class="kw">const</span> e <span class="kw">of</span> sorted)
+    <span class="kw">if</span> (dsu.union(e.u, e.v)) mst.push(e);
+  <span class="kw">return</span> mst;
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+<section id="prim">
+  <div class="wrap">
+    <div class="kicker">02 — Algorithm</div>
+    <h2 style="color:var(--amber)">Prim's Algorithm</h2>
+    <p class="lead">
+      Start at any vertex and mark it visited. At every step, look at all edges with exactly one endpoint
+      inside the growing tree — the <b>frontier</b> — and add the cheapest one, pulling a new vertex in.
+      Repeat until every vertex is visited. This also follows the cut property, applied at the single cut
+      between "visited" and "unvisited" vertices.
+    </p>
+
+    <h3>Pseudocode</h3>
+    <div class="code-block">
+      <div class="cb-head"><span>prim.pseudo</span><span>O(E log V) with a binary heap</span></div>
+      <pre><span class="gutter">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11</span><code><span class="kw">function</span> <span class="fn">Prim</span>(V, E, start):
+    visited ← {start}
+    MST ← ∅
+    heap ← min-heap of edges leaving start, keyed by weight
+    <span class="kw">while</span> |visited| < |V|:
+        (u, v, w) ← heap.popMin()      <span class="cm">// cheapest frontier edge</span>
+        <span class="kw">if</span> v <span class="kw">in</span> visited: <span class="kw">continue</span>       <span class="cm">// stale entry, skip</span>
+        MST.add((u, v, w))
+        visited.add(v)
+        <span class="kw">for</span> each edge (v, x, w2) <span class="kw">where</span> x ∉ visited:
+            heap.push((v, x, w2))
+    <span class="kw">return</span> MST</code></pre>
+    </div>
+
+    <h3>Reference implementation (JavaScript)</h3>
+    <div class="code-block">
+      <div class="cb-head"><span>prim.js</span><span>adjacency-list + lazy heap</span></div>
+      <pre><span class="gutter">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17</span><code><span class="kw">function</span> <span class="fn">prim</span>(n, adj, start = <span class="num">0</span>) {
+  <span class="kw">const</span> visited = Array(n).fill(<span class="kw">false</span>);
+  visited[start] = <span class="kw">true</span>;
+  <span class="kw">const</span> mst = []; <span class="kw">let</span> visitedCount = <span class="num">1</span>;
+  <span class="kw">while</span> (visitedCount < n) {
+    <span class="kw">let</span> best = <span class="kw">null</span>;
+    <span class="kw">for</span> (<span class="kw">const</span> e <span class="kw">of</span> adj)                    <span class="cm">// swap for a real heap at scale</span>
+      <span class="kw">if</span> (visited[e.u] !== visited[e.v])
+        <span class="kw">if</span> (!best || e.w < best.w) best = e;
+    <span class="kw">if</span> (!best) <span class="kw">break</span>;                       <span class="cm">// graph disconnected</span>
+    mst.push(best);
+    visited[visited[best.u] ? best.v : best.u] = <span class="kw">true</span>;
+    visitedCount++;
+  }
+  <span class="kw">return</span> mst;
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+<section id="visualizer">
+  <div class="wrap">
+    <div class="kicker">03 — Live trace</div>
+    <h2>Step through both algorithms</h2>
+    <p class="lead">
+      Generate a random connected graph, then run each algorithm one decision at a time. The right-hand
+      panel mirrors the algorithm's internal state — Kruskal's sorted edge queue, or Prim's frontier — so
+      you can see exactly which comparison is being made at each step.
+    </p>
+
+    <div class="viz-shell">
+      <div class="viz-toolbar">
+        <button class="btn primary" id="btnNewGraph">↻ New graph</button>
+        <button class="btn" id="btnStep">Step →</button>
+        <button class="btn" id="btnPlay">▶ Play</button>
+        <button class="btn" id="btnReset">Reset run</button>
+        <div class="tabgroup">
+          <button class="active k" id="tabK" data-algo="kruskal">Kruskal</button>
+          <button class="p" id="tabP" data-algo="prim">Prim</button>
+        </div>
+      </div>
+      <div class="viz-body">
+        <div class="canvas-wrap">
+          <canvas id="graphCanvas" width="620" height="460"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panel-stats">
+            <div class="stat"><div class="n" id="statEdges">0 / 0</div><div class="l">MST edges</div></div>
+            <div class="stat"><div class="n" id="statWeight">0</div><div class="l">Total weight</div></div>
+            <div class="stat"><div class="n" id="statStep">0</div><div class="l">Step</div></div>
+          </div>
+          <div class="panel-title" id="listTitle">Sorted edge queue</div>
+          <div class="edge-list" id="edgeList"></div>
+          <div class="panel-title" style="margin-top:14px;">Trace log</div>
+          <div class="log" id="logBox"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="comparison">
+  <div class="wrap">
+    <div class="kicker">04 — Comparative analysis</div>
+    <h2>Kruskal vs. Prim, side by side</h2>
+    <table class="cmp">
+      <tr><th>Aspect</th><th>Kruskal's</th><th>Prim's</th></tr>
+      <tr><td>Approach</td><td class="k">Edge-centric, global sort</td><td class="p">Vertex-centric, local frontier</td></tr>
+      <tr><td>Core structure</td><td class="k">Union–Find (disjoint set)</td><td class="p">Min-priority queue / heap</td></tr>
+      <tr><td>Time (heap/DSU)</td><td class="k">O(E log E)</td><td class="p">O(E log V) with binary heap</td></tr>
+      <tr><td>Time (dense, array)</td><td class="k">O(E log E) — sort dominates</td><td class="p">O(V²) with simple array — often faster</td></tr>
+      <tr><td>Space</td><td class="k">O(V + E)</td><td class="p">O(V + E)</td></tr>
+      <tr><td>Best suited for</td><td class="k">Sparse graphs, edge-list input</td><td class="p">Dense graphs, adjacency-matrix input</td></tr>
+      <tr><td>Intermediate state</td><td class="k">A forest (multiple components)</td><td class="p">Always one connected tree</td></tr>
+      <tr><td>Cycle avoidance</td><td class="k">Explicit Find/Union check</td><td class="p">Implicit — only unvisited vertices join</td></tr>
+      <tr><td>Parallelizable</td><td class="k">Sorting step parallelizes well</td><td class="p">Harder — inherently sequential growth</td></tr>
+    </table>
+    <p style="margin-top:22px;">
+      In practice: pick <b>Kruskal</b> when the graph is sparse and already available as an edge list, or
+      when you need an easy way to stop early with a bound. Pick <b>Prim</b> when the graph is dense, stored
+      as an adjacency matrix, or when a Fibonacci heap is available, since it then achieves
+      O(E + V log V).
+    </p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p><b style="color:var(--text)">References</b></p>
+    <ul class="ref-list">
+      <li>Cormen, Leiserson, Rivest, Stein — <i>Introduction to Algorithms</i>, MST chapter.</li>
+      <li>Kruskal, J. B. (1956). On the shortest spanning subtree of a graph.</li>
+      <li>Prim, R. C. (1957). Shortest connection networks and some generalizations.</li>
+    </ul>
+    <p style="margin-top:26px;">Project deliverable — Minimum Spanning Tree algorithms, single-file HTML build.</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  const canvas = document.getElementById('graphCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const CSS = getComputedStyle(document.documentElement);
+  const col = n => CSS.getPropertyValue(n).trim();
+
+  let nodes = [], edges = [];
+  let algo = 'kruskal';
+  let steps = [], stepIndex = 0;
+  let playTimer = null;
+
+  function rand(a,b){ return a + Math.random()*(b-a); }
+  function shuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
+
+  function generateGraph(n){
+    n = n || (7 + Math.floor(Math.random()*3)); // 7-9 nodes
+    nodes = [];
+    const cx = W/2, cy = H/2 - 6, r = Math.min(W,H)/2 - 60;
+    for(let i=0;i<n;i++){
+      const angle = (i/n)*Math.PI*2 - Math.PI/2;
+      nodes.push({ id:i, x: cx + r*Math.cos(angle), y: cy + r*Math.sin(angle) });
+    }
+    const edgeSet = new Set();
+    const list = [];
+    function addEdge(a,b){
+      if(a===b) return false;
+      const key = a<b ? a+'-'+b : b+'-'+a;
+      if(edgeSet.has(key)) return false;
+      edgeSet.add(key);
+      list.push({ u: Math.min(a,b), v: Math.max(a,b), w: 2 + Math.floor(Math.random()*47), id:key });
+      return true;
+    }
+    // guarantee connectivity via random spanning order
+    const order = shuffle([...Array(n).keys()]);
+    for(let i=1;i<n;i++){
+      const a = order[i], b = order[Math.floor(Math.random()*i)];
+      addEdge(a,b);
+    }
+    // sprinkle extra edges for a richer graph
+    const extraTarget = Math.floor(n*0.9);
+    let added = 0, tries = 0;
+    while(added < extraTarget && tries < 300){
+      tries++;
+      const a = Math.floor(Math.random()*n), b = Math.floor(Math.random()*n);
+      if(addEdge(a,b)) added++;
+    }
+    edges = list;
+  }
+
+  // ---------- Union-Find ----------
+  class UnionFind{
+    constructor(n){ this.p=[...Array(n).keys()]; this.rank=Array(n).fill(0); }
+    find(x){ while(this.p[x]!==x){ this.p[x]=this.p[this.p[x]]; x=this.p[x]; } return x; }
+    union(a,b){
+      let ra=this.find(a), rb=this.find(b);
+      if(ra===rb) return false;
+      if(this.rank[ra]<this.rank[rb]) [ra,rb]=[rb,ra];
+      this.p[rb]=ra;
+      if(this.rank[ra]===this.rank[rb]) this.rank[ra]++;
+      return true;
+    }
+  }
+
+  function buildKruskalSteps(){
+    const sorted = [...edges].sort((a,b)=>a.w-b.w);
+    const uf = new UnionFind(nodes.length);
+    const s = [];
+    for(const e of sorted){
+      const willAccept = uf.find(e.u) !== uf.find(e.v);
+      s.push({ edge:e, action: willAccept?'accept':'reject', queueSnapshot: sorted });
+      if(willAccept) uf.union(e.u, e.v);
+    }
+    return s;
+  }
+
+  function buildPrimSteps(start){
+    const n = nodes.length;
+    const visited = Array(n).fill(false);
+    visited[start] = true;
+    const s = [];
+    let count = 1;
+    while(count < n){
+      const frontier = edges.filter(e => visited[e.u] !== visited[e.v]).sort((a,b)=>a.w-b.w);
+      if(frontier.length === 0) break;
+      const chosen = frontier[0];
+      s.push({ edge: chosen, action:'accept', queueSnapshot: frontier });
+      const newNode = visited[chosen.u] ? chosen.v : chosen.u;
+      visited[newNode] = true;
+      count++;
+    }
+    return s;
+  }
+
+  function rebuildSteps(){
+    steps = algo === 'kruskal' ? buildKruskalSteps() : buildPrimSteps(0);
+    stepIndex = 0;
+  }
+
+  // ---------- drawing ----------
+  function edgeState(e){
+    // determine accepted / rejected / pending / current based on steps up to stepIndex
+    let state = 'pending';
+    for(let i=0;i<stepIndex;i++){
+      if(steps[i].edge.id === e.id){ state = steps[i].action; }
+    }
+    if(stepIndex < steps.length && steps[stepIndex].edge.id === e.id) state = 'current';
+    return state;
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    // edges
+    edges.forEach(e=>{
+      const a = nodes[e.u], b = nodes[e.v];
+      const st = edgeState(e);
+      ctx.beginPath();
+      ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+      if(st==='accept'){ ctx.strokeStyle = col('--teal'); ctx.lineWidth = 3; }
+      else if(st==='current'){ ctx.strokeStyle = col('--amber'); ctx.lineWidth = 3; }
+      else if(st==='reject'){ ctx.strokeStyle = col('--rose'); ctx.lineWidth = 1; ctx.globalAlpha = 0.35; }
+      else { ctx.strokeStyle = col('--dim'); ctx.lineWidth = 1; ctx.globalAlpha = 0.55; }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // weight label
+      const mx = (a.x+b.x)/2, my=(a.y+b.y)/2;
+      ctx.font = '11px JetBrains Mono, monospace';
+      ctx.fillStyle = st==='accept' ? col('--teal') : st==='current' ? col('--amber') : col('--dim');
+      const pad = 3;
+      const txt = String(e.w);
+      const tw = ctx.measureText(txt).width;
+      ctx.fillStyle = '#0C0E13';
+      ctx.fillRect(mx-tw/2-pad, my-8, tw+pad*2, 14);
+      ctx.fillStyle = st==='accept' ? col('--teal') : st==='current' ? col('--amber') : col('--dim');
+      ctx.fillText(txt, mx-tw/2, my+3);
+    });
+    // determine visited set for node coloring (prim) / component coloring (kruskal accepted)
+    const inTree = new Set();
+    for(let i=0;i<stepIndex;i++){
+      if(steps[i].action==='accept'){ inTree.add(steps[i].edge.u); inTree.add(steps[i].edge.v); }
+    }
+    if(algo==='prim') inTree.add(0);
+
+    nodes.forEach(node=>{
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, 15, 0, Math.PI*2);
+      ctx.fillStyle = inTree.has(node.id) ? col('--teal') : col('--surface-2');
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = inTree.has(node.id) ? col('--teal') : col('--border');
+      ctx.stroke();
+      ctx.fillStyle = inTree.has(node.id) ? '#08110F' : col('--muted');
+      ctx.font = '600 12px JetBrains Mono, monospace';
+      const label = String(node.id);
+      const tw = ctx.measureText(label).width;
+      ctx.fillText(label, node.x-tw/2, node.y+4);
+    });
+  }
+
+  // ---------- panel ----------
+  function renderPanel(){
+    document.getElementById('listTitle').textContent =
+      algo==='kruskal' ? 'Sorted edge queue' : 'Current frontier (min at top)';
+
+    const currentSnapshot = stepIndex < steps.length ? steps[stepIndex].queueSnapshot
+                             : (steps.length ? steps[steps.length-1].queueSnapshot : [...edges].sort((a,b)=>a.w-b.w));
+
+    const listEl = document.getElementById('edgeList');
+    listEl.innerHTML = '';
+    currentSnapshot.forEach(e=>{
+      const st = edgeState(e);
+      const row = document.createElement('div');
+      row.className = 'edge-row' + (st==='accept' ? ' accepted' : st==='reject' ? ' rejected' : st==='current' ? ' current' : '');
+      row.innerHTML = `<span>(${e.u} — ${e.v})</span><span>w=${e.w}</span>`;
+      listEl.appendChild(row);
+    });
+
+    let acceptedCount = 0, totalW = 0;
+    for(let i=0;i<stepIndex;i++){
+      if(steps[i].action==='accept'){ acceptedCount++; totalW += steps[i].edge.w; }
+    }
+    document.getElementById('statEdges').textContent = `${acceptedCount} / ${nodes.length-1}`;
+    document.getElementById('statWeight').textContent = totalW;
+    document.getElementById('statStep').textContent = `${stepIndex} / ${steps.length}`;
+  }
+
+  function log(msg, cls){
+    const box = document.getElementById('logBox');
+    const line = document.createElement('div');
+    if(cls) line.className = cls;
+    line.textContent = msg;
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function clearLog(){ document.getElementById('logBox').innerHTML=''; }
+
+  function doStep(){
+    if(stepIndex >= steps.length){ log('— run complete —', 'sys'); stopPlay(); return; }
+    const s = steps[stepIndex];
+    if(s.action==='accept'){
+      log(`✓ accept (${s.edge.u}—${s.edge.v}) w=${s.edge.w}`, 'ok');
+    } else {
+      log(`✗ reject (${s.edge.u}—${s.edge.v}) w=${s.edge.w} — would form a cycle`, 'no');
+    }
+    stepIndex++;
+    draw();
+    renderPanel();
+    if(stepIndex >= steps.length){
+      const totalW = steps.filter(s=>s.action==='accept').reduce((a,s)=>a+s.edge.w,0);
+      log(`— MST complete, total weight = ${totalW} —`, 'sys');
+      stopPlay();
+    }
+  }
+
+  function stopPlay(){
+    if(playTimer){ clearInterval(playTimer); playTimer = null; }
+    document.getElementById('btnPlay').textContent = '▶ Play';
+  }
+
+  document.getElementById('btnStep').addEventListener('click', ()=>{ stopPlay(); doStep(); });
+  document.getElementById('btnPlay').addEventListener('click', ()=>{
+    if(playTimer){ stopPlay(); return; }
+    document.getElementById('btnPlay').textContent = '⏸ Pause';
+    playTimer = setInterval(()=>{
+      if(stepIndex >= steps.length){ stopPlay(); return; }
+      doStep();
+    }, 650);
+  });
+  document.getElementById('btnReset').addEventListener('click', ()=>{
+    stopPlay(); rebuildSteps(); clearLog(); draw(); renderPanel();
+    log(`— reset: replaying ${algo} on current graph —`, 'sys');
+  });
+  document.getElementById('btnNewGraph').addEventListener('click', ()=>{
+    stopPlay(); generateGraph(); rebuildSteps(); clearLog(); draw(); renderPanel();
+    log(`— new graph generated (${nodes.length} nodes, ${edges.length} edges) —`, 'sys');
+  });
+  document.getElementById('tabK').addEventListener('click', ()=> switchAlgo('kruskal'));
+  document.getElementById('tabP').addEventListener('click', ()=> switchAlgo('prim'));
+
+  function switchAlgo(which){
+    stopPlay();
+    algo = which;
+    document.getElementById('tabK').classList.toggle('active', which==='kruskal');
+    document.getElementById('tabP').classList.toggle('active', which==='prim');
+    rebuildSteps(); clearLog(); draw(); renderPanel();
+    log(`— switched to ${which} —`, 'sys');
+  }
+
+  // init
+  generateGraph();
+  rebuildSteps();
+  draw();
+  renderPanel();
+  log(`— graph ready (${nodes.length} nodes, ${edges.length} edges). Press Step or Play. —`, 'sys');
+
+  // ---------- nav dot active state ----------
+  const dots = document.querySelectorAll('#navdots a');
+  const sections = ['overview','kruskal','prim','visualizer','comparison'].map(id=>document.getElementById(id));
+  window.addEventListener('scroll', ()=>{
+    let idx = 0;
+    sections.forEach((sec,i)=>{ if(sec && window.scrollY >= sec.offsetTop - window.innerHeight*0.4) idx = i; });
+    dots.forEach((d,i)=> d.classList.toggle('active', i===idx));
+  });
+})();
+</script>
+</body>
+</html>
