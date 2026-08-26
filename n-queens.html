@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>N-Queens - Backtracking</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: linear-gradient(135deg,#1f2937,#111827);
+    color: #e5e7eb;
+    margin: 0;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  h1 { text-align: center; color: #93c5fd; margin-bottom: 4px; }
+  p.sub { text-align: center; color: #9ca3af; margin-top: 0; }
+  .card {
+    max-width: 950px;
+    margin: 20px auto;
+    background: #1f2937;
+    border: 1px solid #374151;
+    border-radius: 12px;
+    padding: 20px 24px;
+  }
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  input[type="number"] {
+    width: 90px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #4b5563;
+    background: #111827;
+    color: #e5e7eb;
+    font-size: 14px;
+  }
+  button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    background: #2563eb;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  button:hover { background: #1d4ed8; }
+  button.secondary { background: #374151; }
+  button.secondary:hover { background: #4b5563; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .hint { color: #9ca3af; font-size: 12px; margin-top: 6px; }
+  .layout { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 18px; }
+  .board-area { flex: 1; min-width: 300px; }
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .stat-box {
+    flex: 1;
+    min-width: 120px;
+    background: #111827;
+    border-radius: 10px;
+    padding: 10px 14px;
+    text-align: center;
+    border: 1px solid #374151;
+  }
+  .stat-box .label { color: #9ca3af; font-size: 12px; }
+  .stat-box .value { font-size: 20px; font-weight: 700; margin-top: 2px; }
+  .sol-color { color: #34d399; }
+  .cur-color { color: #fbbf24; }
+  #board {
+    display: grid;
+    gap: 2px;
+    background: #374151;
+    border: 2px solid #374151;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+  .cell {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+  }
+  .light { background: #d1d5db; }
+  .dark { background: #6b7280; }
+  .attacked { background: #7f1d1d !important; }
+  .queen { color: #111827; }
+  #log {
+    flex: 1;
+    min-width: 260px;
+    background: #0b1220;
+    border-radius: 10px;
+    padding: 14px 16px;
+    max-height: 420px;
+    overflow-y: auto;
+    font-family: 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .place { color: #a7f3d0; }
+  .backtrack { color: #f87171; }
+  .found { color: #fbbf24; font-weight: 600; }
+  footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 30px; }
+</style>
+</head>
+<body>
+
+<h1>N-Queens Problem</h1>
+<p class="sub">Solved using the Backtracking technique</p>
+
+<div class="card">
+  <div class="controls">
+    <label for="nInput" style="color:#9ca3af; font-size:14px;">Board size N:</label>
+    <input type="number" id="nInput" value="6" min="1" max="10">
+    <button onclick="runAlgorithm()">Solve</button>
+    <button class="secondary" onclick="stepMode()">Step through search</button>
+    <button class="secondary" id="nextBtn" onclick="nextStep()" disabled>Next step</button>
+  </div>
+  <div class="hint">Backtracking places queens row by row, skipping any column that is attacked, and undoes a placement when a row has no safe column.</div>
+
+  <div class="layout">
+    <div class="board-area">
+      <div class="stats">
+        <div class="stat-box">
+          <div class="label">Total solutions</div>
+          <div class="value sol-color" id="solCount">-</div>
+        </div>
+        <div class="stat-box">
+          <div class="label">Showing solution</div>
+          <div class="value cur-color" id="curSol">-</div>
+        </div>
+      </div>
+      <div id="board"></div>
+      <div class="controls" style="margin-top:12px; justify-content:center;">
+        <button class="secondary" onclick="prevSolution()">&larr; Prev solution</button>
+        <button class="secondary" onclick="nextSolution()">Next solution &rarr;</button>
+      </div>
+    </div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<footer>N-Queens Backtracking &mdash; board shows the currently selected solution; log shows every place/backtrack decision</footer>
+
+<script>
+let allSolutions = [];
+let currentSolIndex = 0;
+let N = 6;
+let logLines = [];
+
+let stepLines = [];
+let stepIndex = 0;
+let stepping = false;
+
+function isSafe(cols, row, col) {
+  for (let r = 0; r < row; r++) {
+    const c = cols[r];
+    if (c === col || Math.abs(c - col) === Math.abs(r - row)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function solveNQueens(n, collectLog) {
+  const solutions = [];
+  const cols = new Array(n).fill(-1);
+  const log = [];
+
+  function backtrack(row) {
+    if (row === n) {
+      solutions.push([...cols]);
+      if (collectLog) log.push(`<span class="found">solution #${solutions.length} found: [${cols.join(', ')}]</span>`);
+      return;
+    }
+    for (let c = 0; c < n; c++) {
+      if (isSafe(cols, row, c)) {
+        cols[row] = c;
+        if (collectLog) log.push(`<span class="place">place queen at row ${row}, col ${c}</span>`);
+        backtrack(row + 1);
+        if (collectLog) log.push(`<span class="backtrack">backtrack: remove queen from row ${row}, col ${c}</span>`);
+        cols[row] = -1;
+      } else {
+        if (collectLog) log.push(`row ${row}, col ${c}: attacked, skip`);
+      }
+    }
+  }
+
+  backtrack(0);
+  return { solutions, log };
+}
+
+function renderBoard(cols) {
+  const board = document.getElementById('board');
+  board.style.gridTemplateColumns = `repeat(${N}, 1fr)`;
+  board.innerHTML = '';
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
+      if (cols && cols[r] === c) {
+        cell.classList.add('queen');
+        cell.textContent = '♛';
+      }
+      board.appendChild(cell);
+    }
+  }
+}
+
+function updateSolutionView() {
+  document.getElementById('curSol').textContent =
+    allSolutions.length ? `${currentSolIndex + 1} / ${allSolutions.length}` : '0 / 0';
+  renderBoard(allSolutions.length ? allSolutions[currentSolIndex] : null);
+}
+
+function runAlgorithm() {
+  stepping = false;
+  document.getElementById('nextBtn').disabled = true;
+
+  N = parseInt(document.getElementById('nInput').value);
+  if (!N || N < 1 || N > 10) {
+    alert('Please enter a board size between 1 and 10.');
+    return;
+  }
+
+  const { solutions, log } = solveNQueens(N, true);
+  allSolutions = solutions;
+  currentSolIndex = 0;
+
+  document.getElementById('solCount').textContent = solutions.length;
+  document.getElementById('log').innerHTML = log.length
+    ? log.join('<br>')
+    : '<span style="color:#9ca3af">No solutions exist for this N.</span>';
+
+  updateSolutionView();
+}
+
+function nextSolution() {
+  if (!allSolutions.length) return;
+  currentSolIndex = (currentSolIndex + 1) % allSolutions.length;
+  updateSolutionView();
+}
+
+function prevSolution() {
+  if (!allSolutions.length) return;
+  currentSolIndex = (currentSolIndex - 1 + allSolutions.length) % allSolutions.length;
+  updateSolutionView();
+}
+
+function stepMode() {
+  N = parseInt(document.getElementById('nInput').value);
+  if (!N || N < 1 || N > 10) {
+    alert('Please enter a board size between 1 and 10.');
+    return;
+  }
+  const { solutions, log } = solveNQueens(N, true);
+  allSolutions = solutions;
+  currentSolIndex = 0;
+  document.getElementById('solCount').textContent = solutions.length;
+
+  stepLines = log;
+  stepIndex = 0;
+  stepping = true;
+  document.getElementById('log').innerHTML = '<span style="color:#9ca3af">Click "Next step" to walk through the search, one decision at a time.</span>';
+  document.getElementById('nextBtn').disabled = false;
+  renderBoard(null);
+  document.getElementById('curSol').textContent = '0 / ' + solutions.length;
+}
+
+function nextStep() {
+  if (!stepping || stepIndex >= stepLines.length) {
+    document.getElementById('nextBtn').disabled = true;
+    return;
+  }
+  const shown = stepLines.slice(0, stepIndex + 1);
+  document.getElementById('log').innerHTML = shown.join('<br>');
+  document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+  stepIndex++;
+  if (stepIndex >= stepLines.length) {
+    document.getElementById('nextBtn').disabled = true;
+  }
+}
+
+// Run once on load with the default N
+runAlgorithm();
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
