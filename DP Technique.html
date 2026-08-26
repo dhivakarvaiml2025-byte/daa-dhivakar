@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Matrix Chain Multiplication - DP</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: linear-gradient(135deg,#1f2937,#111827);
+    color: #e5e7eb;
+    margin: 0;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  h1 { text-align: center; color: #93c5fd; margin-bottom: 4px; }
+  p.sub { text-align: center; color: #9ca3af; margin-top: 0; }
+  .card {
+    max-width: 950px;
+    margin: 20px auto;
+    background: #1f2937;
+    border: 1px solid #374151;
+    border-radius: 12px;
+    padding: 20px 24px;
+  }
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  input[type="text"] {
+    flex: 1;
+    min-width: 260px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #4b5563;
+    background: #111827;
+    color: #e5e7eb;
+    font-size: 14px;
+  }
+  button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    background: #2563eb;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  button:hover { background: #1d4ed8; }
+  button.secondary { background: #374151; }
+  button.secondary:hover { background: #4b5563; }
+  .hint { color: #9ca3af; font-size: 12px; margin-top: 6px; }
+  .results { display: flex; gap: 16px; margin-top: 16px; flex-wrap: wrap; }
+  .result-box {
+    flex: 1;
+    min-width: 220px;
+    background: #111827;
+    border-radius: 10px;
+    padding: 14px 18px;
+    text-align: center;
+    border: 1px solid #374151;
+  }
+  .result-box .label { color: #9ca3af; font-size: 13px; }
+  .result-box .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .min-color { color: #34d399; }
+  .par-color { color: #fbbf24; word-break: break-word; }
+  table.dp {
+    border-collapse: collapse;
+    margin-top: 18px;
+    width: 100%;
+    font-size: 13px;
+  }
+  table.dp th, table.dp td {
+    border: 1px solid #374151;
+    padding: 8px 10px;
+    text-align: center;
+  }
+  table.dp th { background: #111827; color: #93c5fd; }
+  table.dp td.diag { background: #111827; color: #6b7280; }
+  table.dp td.filled { background: #1e3a5f; color: #e5e7eb; font-weight: 600; }
+  table.dp td.empty { background: transparent; color: #374151; }
+  .tablewrap { overflow-x: auto; margin-top: 10px; }
+  #log {
+    margin-top: 18px;
+    background: #0b1220;
+    border-radius: 10px;
+    padding: 14px 16px;
+    max-height: 320px;
+    overflow-y: auto;
+    font-family: 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .step { color: #a7f3d0; }
+  .best { color: #fbbf24; font-weight: 600; }
+  footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 30px; }
+</style>
+</head>
+<body>
+
+<h1>Matrix Chain Multiplication</h1>
+<p class="sub">Optimal cost computation using Dynamic Programming</p>
+
+<div class="card">
+  <div class="controls">
+    <input type="text" id="dimsInput" value="40, 20, 30, 10, 30" placeholder="Enter matrix dimensions, e.g. 40, 20, 30, 10, 30">
+    <button onclick="runAlgorithm()">Compute Optimal Cost</button>
+    <button class="secondary" onclick="randomDims()">Random Dimensions</button>
+  </div>
+  <div class="hint">Dimensions p0..pn describe matrices A1 (p0 x p1), A2 (p1 x p2), ... An (p(n-1) x pn).</div>
+
+  <div class="results">
+    <div class="result-box">
+      <div class="label">Minimum scalar multiplications</div>
+      <div class="value min-color" id="minVal">-</div>
+    </div>
+    <div class="result-box">
+      <div class="label">Optimal parenthesization</div>
+      <div class="value par-color" id="parVal">-</div>
+    </div>
+  </div>
+
+  <div class="tablewrap">
+    <table class="dp" id="dpTable"></table>
+  </div>
+
+  <div id="log"></div>
+</div>
+
+<footer>Matrix Chain DP &mdash; m[i][j] table filled by increasing chain length; trace shows every split point evaluated</footer>
+
+<script>
+let logLines = [];
+
+function matrixChainOrder(p) {
+  const n = p.length - 1; // number of matrices
+  const m = Array.from({length: n + 1}, () => new Array(n + 1).fill(0));
+  const s = Array.from({length: n + 1}, () => new Array(n + 1).fill(0));
+
+  logLines.push(`<span style="color:#9ca3af">Dimensions p = [${p.join(', ')}]  ->  ${n} matrices (A1..A${n})</span>`);
+
+  // chain length from 2 to n
+  for (let len = 2; len <= n; len++) {
+    for (let i = 1; i <= n - len + 1; i++) {
+      const j = i + len - 1;
+      m[i][j] = Infinity;
+      logLines.push(`<span class="step">[len=${len}] computing m[${i}][${j}] for chain A${i}..A${j}</span>`);
+      for (let k = i; k < j; k++) {
+        const cost = m[i][k] + m[k + 1][j] + p[i - 1] * p[k] * p[j];
+        const isBetter = cost < m[i][j];
+        logLines.push(`&nbsp;&nbsp;&nbsp;&nbsp;split k=${k}: m[${i}][${k}] + m[${k+1}][${j}] + p[${i-1}]*p[${k}]*p[${j}] = ${m[i][k]} + ${m[k+1][j]} + ${p[i-1]*p[k]*p[j]} = ${cost}${isBetter ? ' <span class="best">(new best)</span>' : ''}`);
+        if (isBetter) {
+          m[i][j] = cost;
+          s[i][j] = k;
+        }
+      }
+      logLines.push(`<span class="step">-> m[${i}][${j}] = ${m[i][j]}, split at k=${s[i][j]}</span>`);
+    }
+  }
+
+  return { m, s, n };
+}
+
+function buildParenthesization(s, i, j) {
+  if (i === j) return `A${i}`;
+  return `(${buildParenthesization(s, i, s[i][j])}${buildParenthesization(s, s[i][j] + 1, j)})`;
+}
+
+function renderTable(m, n) {
+  let html = '<tr><th>i \\ j</th>';
+  for (let j = 1; j <= n; j++) html += `<th>${j}</th>`;
+  html += '</tr>';
+  for (let i = 1; i <= n; i++) {
+    html += `<tr><th>${i}</th>`;
+    for (let j = 1; j <= n; j++) {
+      if (j < i) {
+        html += '<td class="empty">-</td>';
+      } else if (j === i) {
+        html += '<td class="diag">0</td>';
+      } else {
+        html += `<td class="filled">${m[i][j]}</td>`;
+      }
+    }
+    html += '</tr>';
+  }
+  document.getElementById('dpTable').innerHTML = html;
+}
+
+function runAlgorithm() {
+  const raw = document.getElementById('dimsInput').value;
+  const p = raw.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0);
+
+  if (p.length < 2) {
+    alert('Please enter at least 2 dimensions (for 1 matrix), e.g. 10, 20, 30 for 2 matrices.');
+    return;
+  }
+
+  logLines = [];
+  const { m, s, n } = matrixChainOrder(p);
+
+  document.getElementById('minVal').textContent = m[1][n];
+  document.getElementById('parVal').textContent = buildParenthesization(s, 1, n);
+  renderTable(m, n);
+  document.getElementById('log').innerHTML = logLines.join('<br>');
+}
+
+function randomDims() {
+  const count = Math.floor(Math.random() * 4) + 3; // 3 to 6 matrices
+  const dims = Array.from({length: count + 1}, () => Math.floor(Math.random() * 40) + 5);
+  document.getElementById('dimsInput').value = dims.join(', ');
+  runAlgorithm();
+}
+
+// Run once on load with the default dimensions
+runAlgorithm();
+</script>
+
+</body>
+</html>
