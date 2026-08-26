@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Randomized Quick Sort</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: linear-gradient(135deg,#1f2937,#111827);
+    color: #e5e7eb;
+    margin: 0;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  h1 { text-align: center; color: #93c5fd; margin-bottom: 4px; }
+  p.sub { text-align: center; color: #9ca3af; margin-top: 0; }
+  .card {
+    max-width: 1000px;
+    margin: 20px auto;
+    background: #1f2937;
+    border: 1px solid #374151;
+    border-radius: 12px;
+    padding: 20px 24px;
+  }
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  input[type="text"] {
+    flex: 1;
+    min-width: 260px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #4b5563;
+    background: #111827;
+    color: #e5e7eb;
+    font-size: 14px;
+  }
+  select {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #4b5563;
+    background: #111827;
+    color: #e5e7eb;
+    font-size: 14px;
+  }
+  button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    background: #2563eb;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  button:hover { background: #1d4ed8; }
+  button.secondary { background: #374151; }
+  button.secondary:hover { background: #4b5563; }
+  .hint { color: #9ca3af; font-size: 12px; margin-top: 6px; }
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+  .stat-box {
+    flex: 1;
+    min-width: 160px;
+    background: #111827;
+    border-radius: 10px;
+    padding: 10px 14px;
+    text-align: center;
+    border: 1px solid #374151;
+  }
+  .stat-box .label { color: #9ca3af; font-size: 12px; }
+  .stat-box .value { font-size: 20px; font-weight: 700; margin-top: 2px; }
+  .cmp-color { color: #34d399; }
+  .depth-color { color: #93c5fd; }
+  .compare-box { margin-top: 18px; }
+  table.cmp {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 8px;
+  }
+  table.cmp th, table.cmp td {
+    border: 1px solid #374151;
+    padding: 8px 10px;
+    text-align: center;
+  }
+  table.cmp th { background: #111827; color: #93c5fd; }
+  table.cmp td.better { color: #34d399; font-weight: 600; }
+  .layout { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 18px; }
+  .board-area { flex: 1; min-width: 300px; }
+  #log {
+    flex: 1;
+    min-width: 280px;
+    background: #0b1220;
+    border-radius: 10px;
+    padding: 14px 16px;
+    max-height: 380px;
+    overflow-y: auto;
+    font-family: 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .pivot-line { color: #fbbf24; }
+  .swap-line { color: #a7f3d0; }
+  .base-line { color: #f472b6; }
+  footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 30px; }
+</style>
+</head>
+<body>
+
+<h1>Randomized Quick Sort</h1>
+<p class="sub">Improving Quick Sort efficiency with random pivot selection</p>
+
+<div class="card">
+  <div class="controls">
+    <input type="text" id="arrInput" value="9, 3, 7, 1, 8, 2, 6, 4, 5" placeholder="Comma-separated numbers">
+    <select id="modeSelect">
+      <option value="random" selected>Randomized pivot</option>
+      <option value="deterministic">Deterministic pivot (last element)</option>
+    </select>
+    <button onclick="runAlgorithm()">Sort</button>
+    <button class="secondary" onclick="randomArray()">Random Array</button>
+    <button class="secondary" onclick="sortedArray()">Already-Sorted Array</button>
+  </div>
+  <div class="hint">Deterministic pivot (always the last element) degrades to O(n&sup2;) on already-sorted input. Randomized pivot avoids this by picking a random element to swap into place before partitioning.</div>
+
+  <div class="stats">
+    <div class="stat-box">
+      <div class="label">Sorted result</div>
+      <div class="value" id="resultVal" style="font-size:15px;">-</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">Comparisons</div>
+      <div class="value cmp-color" id="cmpVal">-</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">Max recursion depth</div>
+      <div class="value depth-color" id="depthVal">-</div>
+    </div>
+  </div>
+
+  <div class="compare-box">
+    <strong>Deterministic vs Randomized comparison count (this input, sorted case highlights the gap)</strong>
+    <table class="cmp" id="cmpTable"></table>
+  </div>
+
+  <div class="layout">
+    <div class="board-area"></div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<footer>Randomized Quick Sort &mdash; log shows every pivot choice, partition swap, and base case during the run</footer>
+
+<script>
+let logLines = [];
+let comparisons = 0;
+let maxDepth = 0;
+
+function partition(arr, low, high, randomized, depth) {
+  let pivotIdx = high;
+  if (randomized) {
+    pivotIdx = low + Math.floor(Math.random() * (high - low + 1));
+    [arr[pivotIdx], arr[high]] = [arr[high], arr[pivotIdx]];
+    logLines.push(`<span class="pivot-line">${'&nbsp;'.repeat(depth*4)}[randomized] chose index ${pivotIdx} as pivot, swapped to position ${high} -> pivot value ${arr[high]}</span>`);
+  } else {
+    logLines.push(`<span class="pivot-line">${'&nbsp;'.repeat(depth*4)}[deterministic] pivot = last element at ${high} -> value ${arr[high]}</span>`);
+  }
+
+  const pivot = arr[high];
+  let i = low - 1;
+  for (let j = low; j < high; j++) {
+    comparisons++;
+    if (arr[j] <= pivot) {
+      i++;
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+      if (i !== j) logLines.push(`<span class="swap-line">${'&nbsp;'.repeat(depth*4)}swap arr[${i}] and arr[${j}] (${arr[j]} &le; pivot ${pivot})</span>`);
+    }
+  }
+  [arr[i + 1], arr[high]] = [arr[high], arr[i + 1]];
+  logLines.push(`${'&nbsp;'.repeat(depth*4)}place pivot ${pivot} at index ${i + 1} -> [${arr.slice(low, high+1).join(', ')}]`);
+  return i + 1;
+}
+
+function quickSort(arr, low, high, randomized, depth) {
+  maxDepth = Math.max(maxDepth, depth);
+  if (low >= high) {
+    if (low === high) logLines.push(`<span class="base-line">${'&nbsp;'.repeat(depth*4)}[base] single element arr[${low}]=${arr[low]}</span>`);
+    return;
+  }
+  logLines.push(`${'&nbsp;'.repeat(depth*4)}sort range [${low}..${high}] = [${arr.slice(low, high+1).join(', ')}]`);
+  const p = partition(arr, low, high, randomized, depth);
+  quickSort(arr, low, p - 1, randomized, depth + 1);
+  quickSort(arr, p + 1, high, randomized, depth + 1);
+}
+
+function countComparisonsOnly(arr, low, high, randomized) {
+  let cmp = 0;
+  function part(a, lo, hi) {
+    let pIdx = hi;
+    if (randomized) {
+      pIdx = lo + Math.floor(Math.random() * (hi - lo + 1));
+      [a[pIdx], a[hi]] = [a[hi], a[pIdx]];
+    }
+    const pivot = a[hi];
+    let i = lo - 1;
+    for (let j = lo; j < hi; j++) {
+      cmp++;
+      if (a[j] <= pivot) { i++; [a[i], a[j]] = [a[j], a[i]]; }
+    }
+    [a[i+1], a[hi]] = [a[hi], a[i+1]];
+    return i + 1;
+  }
+  function qs(a, lo, hi) {
+    if (lo >= hi) return;
+    const p = part(a, lo, hi);
+    qs(a, lo, p - 1);
+    qs(a, p + 1, hi);
+  }
+  qs([...arr], low, high);
+  return cmp;
+}
+
+function runAlgorithm() {
+  const raw = document.getElementById('arrInput').value;
+  const original = raw.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+  const mode = document.getElementById('modeSelect').value;
+
+  if (original.length === 0) {
+    alert('Please enter a valid comma-separated list of numbers.');
+    return;
+  }
+
+  logLines = [];
+  comparisons = 0;
+  maxDepth = 0;
+
+  const arr = [...original];
+  logLines.push(`<span style="color:#9ca3af">Input array: [${arr.join(', ')}] &mdash; mode: ${mode === 'random' ? 'randomized pivot' : 'deterministic pivot'}</span>`);
+  quickSort(arr, 0, arr.length - 1, mode === 'random', 0);
+
+  document.getElementById('resultVal').textContent = '[' + arr.join(', ') + ']';
+  document.getElementById('cmpVal').textContent = comparisons;
+  document.getElementById('depthVal').textContent = maxDepth;
+  document.getElementById('log').innerHTML = logLines.join('<br>');
+
+  // Comparison table: run both modes a few times on this exact input
+  const detCmp = countComparisonsOnly(original, 0, original.length - 1, false);
+  const randTrials = [1,2,3].map(() => countComparisonsOnly(original, 0, original.length - 1, true));
+  const avgRand = Math.round(randTrials.reduce((a,b)=>a+b,0) / randTrials.length);
+
+  document.getElementById('cmpTable').innerHTML = `
+    <tr><th>Pivot strategy</th><th>Comparisons</th></tr>
+    <tr><td>Deterministic (last element)</td><td class="${detCmp > avgRand ? '' : 'better'}">${detCmp}</td></tr>
+    <tr><td>Randomized (avg of 3 runs: ${randTrials.join(', ')})</td><td class="${avgRand <= detCmp ? 'better' : ''}">${avgRand}</td></tr>
+  `;
+}
+
+function randomArray() {
+  const n = Math.floor(Math.random() * 6) + 6;
+  const arr = Array.from({length: n}, () => Math.floor(Math.random() * 50));
+  document.getElementById('arrInput').value = arr.join(', ');
+  runAlgorithm();
+}
+
+function sortedArray() {
+  const n = Math.floor(Math.random() * 4) + 8;
+  const arr = Array.from({length: n}, (_, i) => (i + 1) * 2);
+  document.getElementById('arrInput').value = arr.join(', ');
+  runAlgorithm();
+}
+
+// Run once on load with the default array
+runAlgorithm();
+</script>
+
+</body>
+</html>
