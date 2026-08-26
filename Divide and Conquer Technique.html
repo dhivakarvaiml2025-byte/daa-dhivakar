@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Min-Max using Divide and Conquer</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: linear-gradient(135deg,#1f2937,#111827);
+    color: #e5e7eb;
+    margin: 0;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  h1 { text-align: center; color: #93c5fd; margin-bottom: 4px; }
+  p.sub { text-align: center; color: #9ca3af; margin-top: 0; }
+  .card {
+    max-width: 900px;
+    margin: 20px auto;
+    background: #1f2937;
+    border: 1px solid #374151;
+    border-radius: 12px;
+    padding: 20px 24px;
+  }
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  input[type="text"] {
+    flex: 1;
+    min-width: 220px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #4b5563;
+    background: #111827;
+    color: #e5e7eb;
+    font-size: 14px;
+  }
+  button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    background: #2563eb;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  button:hover { background: #1d4ed8; }
+  button.secondary { background: #374151; }
+  button.secondary:hover { background: #4b5563; }
+  .results { display: flex; gap: 16px; margin-top: 16px; flex-wrap: wrap; }
+  .result-box {
+    flex: 1;
+    min-width: 140px;
+    background: #111827;
+    border-radius: 10px;
+    padding: 14px 18px;
+    text-align: center;
+    border: 1px solid #374151;
+  }
+  .result-box .label { color: #9ca3af; font-size: 13px; }
+  .result-box .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+  .min-color { color: #f87171; }
+  .max-color { color: #34d399; }
+  .cmp-color { color: #fbbf24; }
+  #log {
+    margin-top: 18px;
+    background: #0b1220;
+    border-radius: 10px;
+    padding: 14px 16px;
+    max-height: 320px;
+    overflow-y: auto;
+    font-family: 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .depth-0 { color: #93c5fd; }
+  .depth-1 { color: #a7f3d0; }
+  .depth-2 { color: #fcd34d; }
+  .depth-3 { color: #fca5a5; }
+  .depth-4 { color: #d8b4fe; }
+  .base { color: #f472b6; font-weight: 600; }
+  .combine { color: #60a5fa; }
+  footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 30px; }
+</style>
+</head>
+<body>
+
+<h1>Min-Max Finder</h1>
+<p class="sub">Using the Divide and Conquer technique</p>
+
+<div class="card">
+  <div class="controls">
+    <input type="text" id="arrInput" value="12, 45, 3, 67, 8, 1, 90, 34, 22, 56" placeholder="Enter comma-separated numbers">
+    <button onclick="runAlgorithm()">Find Min &amp; Max</button>
+    <button class="secondary" onclick="randomArray()">Random Array</button>
+  </div>
+
+  <div class="results">
+    <div class="result-box">
+      <div class="label">Minimum</div>
+      <div class="value min-color" id="minVal">-</div>
+    </div>
+    <div class="result-box">
+      <div class="label">Maximum</div>
+      <div class="value max-color" id="maxVal">-</div>
+    </div>
+    <div class="result-box">
+      <div class="label">Comparisons</div>
+      <div class="value cmp-color" id="cmpVal">-</div>
+    </div>
+  </div>
+
+  <div id="log"></div>
+</div>
+
+<footer>Divide &amp; Conquer Min-Max &mdash; recursion trace shown above (color-coded by recursion depth)</footer>
+
+<script>
+let comparisons = 0;
+let logLines = [];
+
+function findMinMax(arr, low, high, depth) {
+  const indent = '&nbsp;'.repeat(depth * 4);
+  const cls = 'depth-' + (depth % 5);
+
+  // Base case: single element
+  if (low === high) {
+    logLines.push(`<span class="${cls}">${indent}[base] single element -> arr[${low}] = ${arr[low]} => min=${arr[low]}, max=${arr[low]}</span>`);
+    return { min: arr[low], max: arr[low] };
+  }
+
+  // Base case: two elements
+  if (high === low + 1) {
+    comparisons++;
+    const mn = Math.min(arr[low], arr[high]);
+    const mx = Math.max(arr[low], arr[high]);
+    logLines.push(`<span class="${cls} base">${indent}[base] pair -> arr[${low}]=${arr[low]}, arr[${high}]=${arr[high]} => min=${mn}, max=${mx}</span>`);
+    return { min: mn, max: mx };
+  }
+
+  // Divide
+  const mid = Math.floor((low + high) / 2);
+  logLines.push(`<span class="${cls}">${indent}[divide] range [${low}..${high}] split at mid=${mid} -> left [${low}..${mid}], right [${mid+1}..${high}]</span>`);
+
+  const left = findMinMax(arr, low, mid, depth + 1);
+  const right = findMinMax(arr, mid + 1, high, depth + 1);
+
+  // Combine
+  comparisons += 2;
+  const combinedMin = Math.min(left.min, right.min);
+  const combinedMax = Math.max(left.max, right.max);
+  logLines.push(`<span class="${cls} combine">${indent}[combine] range [${low}..${high}] -> min(${left.min}, ${right.min})=${combinedMin}, max(${left.max}, ${right.max})=${combinedMax}</span>`);
+
+  return { min: combinedMin, max: combinedMax };
+}
+
+function runAlgorithm() {
+  const raw = document.getElementById('arrInput').value;
+  const arr = raw.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+
+  if (arr.length === 0) {
+    alert('Please enter a valid comma-separated list of numbers.');
+    return;
+  }
+
+  comparisons = 0;
+  logLines = [];
+  logLines.push(`<span style="color:#9ca3af">Input array: [${arr.join(', ')}]</span>`);
+
+  const result = findMinMax(arr, 0, arr.length - 1, 0);
+
+  document.getElementById('minVal').textContent = result.min;
+  document.getElementById('maxVal').textContent = result.max;
+  document.getElementById('cmpVal').textContent = comparisons;
+  document.getElementById('log').innerHTML = logLines.join('<br>');
+}
+
+function randomArray() {
+  const n = Math.floor(Math.random() * 8) + 5;
+  const arr = Array.from({length: n}, () => Math.floor(Math.random() * 100));
+  document.getElementById('arrInput').value = arr.join(', ');
+  runAlgorithm();
+}
+
+// Run once on load with the default array
+runAlgorithm();
+</script>
+
+</body>
+</html>
