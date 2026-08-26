@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bin Packing - Approximation Algorithms</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: linear-gradient(135deg,#1f2937,#111827);
+    color: #e5e7eb;
+    margin: 0;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  h1 { text-align: center; color: #93c5fd; margin-bottom: 4px; }
+  p.sub { text-align: center; color: #9ca3af; margin-top: 0; }
+  .card {
+    max-width: 1000px;
+    margin: 20px auto;
+    background: #1f2937;
+    border: 1px solid #374151;
+    border-radius: 12px;
+    padding: 20px 24px;
+  }
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  input[type="text"], input[type="number"] {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #4b5563;
+    background: #111827;
+    color: #e5e7eb;
+    font-size: 14px;
+  }
+  input[type="text"] { flex: 1; min-width: 260px; }
+  input[type="number"] { width: 90px; }
+  select {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #4b5563;
+    background: #111827;
+    color: #e5e7eb;
+    font-size: 14px;
+  }
+  button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    background: #2563eb;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  button:hover { background: #1d4ed8; }
+  button.secondary { background: #374151; }
+  button.secondary:hover { background: #4b5563; }
+  .hint { color: #9ca3af; font-size: 12px; margin-top: 6px; }
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+  .stat-box {
+    flex: 1;
+    min-width: 150px;
+    background: #111827;
+    border-radius: 10px;
+    padding: 10px 14px;
+    text-align: center;
+    border: 1px solid #374151;
+  }
+  .stat-box .label { color: #9ca3af; font-size: 12px; }
+  .stat-box .value { font-size: 20px; font-weight: 700; margin-top: 2px; }
+  .bins-color { color: #34d399; }
+  .lb-color { color: #93c5fd; }
+  .waste-color { color: #fbbf24; }
+  .layout { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 18px; }
+  .board-area { flex: 1.3; min-width: 320px; }
+  #binsWrap {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    background: #111827;
+    border: 1px solid #374151;
+    border-radius: 10px;
+    padding: 16px;
+    min-height: 260px;
+  }
+  .bin {
+    width: 60px;
+    display: flex;
+    flex-direction: column-reverse;
+    border: 2px solid #4b5563;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #1f2937;
+  }
+  .bin-label { text-align: center; font-size: 11px; color: #9ca3af; margin-top: 4px; }
+  .item {
+    font-size: 11px;
+    text-align: center;
+    color: #111827;
+    font-weight: 600;
+    border-top: 1px solid rgba(0,0,0,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .bincol { display: flex; flex-direction: column; align-items: center; }
+  #log {
+    flex: 1;
+    min-width: 280px;
+    background: #0b1220;
+    border-radius: 10px;
+    padding: 14px 16px;
+    max-height: 420px;
+    overflow-y: auto;
+    font-family: 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .place { color: #a7f3d0; }
+  .newbin { color: #fbbf24; }
+  footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 30px; }
+</style>
+</head>
+<body>
+
+<h1>Bin Packing</h1>
+<p class="sub">Efficient packing using approximation algorithms</p>
+
+<div class="card">
+  <div class="controls">
+    <input type="text" id="itemsInput" value="5, 8, 2, 7, 4, 6, 3, 9, 1, 5" placeholder="Item sizes, comma-separated">
+    <label style="color:#9ca3af; font-size:14px;">Bin capacity:</label>
+    <input type="number" id="capInput" value="10" min="1">
+    <select id="algoSelect">
+      <option value="ff">First Fit</option>
+      <option value="ffd" selected>First Fit Decreasing</option>
+      <option value="bf">Best Fit</option>
+      <option value="bfd">Best Fit Decreasing</option>
+      <option value="nf">Next Fit</option>
+    </select>
+    <button onclick="runAlgorithm()">Pack Items</button>
+    <button class="secondary" onclick="randomItems()">Random Items</button>
+  </div>
+  <div class="hint">Approximation algorithms don't guarantee the optimal (minimum-bin) solution, but run fast and stay provably close to it. FFD/BFD sort items largest-first before packing.</div>
+
+  <div class="stats">
+    <div class="stat-box">
+      <div class="label">Bins used</div>
+      <div class="value bins-color" id="binCount">-</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">Lower bound (theoretical min)</div>
+      <div class="value lb-color" id="lowerBound">-</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">Total wasted space</div>
+      <div class="value waste-color" id="wasteVal">-</div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="board-area">
+      <div id="binsWrap"></div>
+    </div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<footer>Bin Packing Approximation &mdash; each algorithm's placement decisions are logged step by step; bin heights are drawn to scale</footer>
+
+<script>
+const colors = ['#f87171','#fbbf24','#34d399','#60a5fa','#a78bfa','#f472b6','#38bdf8','#facc15','#4ade80','#c084fc'];
+let logLines = [];
+
+function nextFit(items, cap) {
+  const bins = [];
+  let current = { items: [], used: 0 };
+  bins.push(current);
+  logLines.push(`<span class="newbin">open bin #1</span>`);
+
+  for (const [idx, size] of items) {
+    if (current.used + size <= cap) {
+      current.items.push(idx);
+      current.used += size;
+      logLines.push(`<span class="place">item ${idx} (size ${size}) -> bin #${bins.length} (now ${current.used}/${cap})</span>`);
+    } else {
+      current = { items: [idx], used: size };
+      bins.push(current);
+      logLines.push(`<span class="newbin">item ${idx} (size ${size}) doesn't fit -> open bin #${bins.length} (now ${size}/${cap})</span>`);
+    }
+  }
+  return bins;
+}
+
+function firstFit(items, cap) {
+  const bins = [];
+  for (const [idx, size] of items) {
+    let placed = false;
+    for (let b = 0; b < bins.length; b++) {
+      if (bins[b].used + size <= cap) {
+        bins[b].items.push(idx);
+        bins[b].used += size;
+        logLines.push(`<span class="place">item ${idx} (size ${size}) -> bin #${b + 1} (now ${bins[b].used}/${cap})</span>`);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      bins.push({ items: [idx], used: size });
+      logLines.push(`<span class="newbin">item ${idx} (size ${size}) doesn't fit any open bin -> open bin #${bins.length} (now ${size}/${cap})</span>`);
+    }
+  }
+  return bins;
+}
+
+function bestFit(items, cap) {
+  const bins = [];
+  for (const [idx, size] of items) {
+    let bestIdx = -1, bestRemaining = Infinity;
+    for (let b = 0; b < bins.length; b++) {
+      const remaining = cap - bins[b].used;
+      if (size <= remaining && remaining < bestRemaining) {
+        bestRemaining = remaining;
+        bestIdx = b;
+      }
+    }
+    if (bestIdx !== -1) {
+      bins[bestIdx].items.push(idx);
+      bins[bestIdx].used += size;
+      logLines.push(`<span class="place">item ${idx} (size ${size}) -> tightest-fit bin #${bestIdx + 1} (now ${bins[bestIdx].used}/${cap})</span>`);
+    } else {
+      bins.push({ items: [idx], used: size });
+      logLines.push(`<span class="newbin">item ${idx} (size ${size}) fits no bin tightly -> open bin #${bins.length} (now ${size}/${cap})</span>`);
+    }
+  }
+  return bins;
+}
+
+function runAlgorithm() {
+  const raw = document.getElementById('itemsInput').value;
+  const sizes = raw.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
+  const cap = parseFloat(document.getElementById('capInput').value);
+  const algo = document.getElementById('algoSelect').value;
+
+  if (sizes.length === 0 || !cap || cap <= 0) {
+    alert('Please enter valid item sizes and a positive bin capacity.');
+    return;
+  }
+  if (sizes.some(s => s > cap)) {
+    alert('One or more items are larger than the bin capacity and can never be packed.');
+    return;
+  }
+
+  let items = sizes.map((s, i) => [i + 1, s]);
+  logLines = [];
+
+  let algoName = '';
+  if (algo === 'ffd' || algo === 'bfd') {
+    items = [...items].sort((a, b) => b[1] - a[1]);
+    logLines.push(`<span style="color:#9ca3af">sorted items largest-first: ${items.map(([i,s]) => `item${i}(${s})`).join(', ')}</span>`);
+  }
+
+  let bins;
+  if (algo === 'nf') { bins = nextFit(items, cap); algoName = 'Next Fit'; }
+  else if (algo === 'ff') { bins = firstFit(items, cap); algoName = 'First Fit'; }
+  else if (algo === 'ffd') { bins = firstFit(items, cap); algoName = 'First Fit Decreasing'; }
+  else if (algo === 'bf') { bins = bestFit(items, cap); algoName = 'Best Fit'; }
+  else { bins = bestFit(items, cap); algoName = 'Best Fit Decreasing'; }
+
+  const totalSize = sizes.reduce((a, b) => a + b, 0);
+  const lowerBound = Math.ceil(totalSize / cap);
+  const wasted = bins.length * cap - totalSize;
+
+  document.getElementById('binCount').textContent = `${bins.length} (${algoName})`;
+  document.getElementById('lowerBound').textContent = lowerBound;
+  document.getElementById('wasteVal').textContent = wasted;
+  document.getElementById('log').innerHTML = logLines.join('<br>');
+
+  renderBins(bins, cap, sizes);
+}
+
+function renderBins(bins, cap, sizes) {
+  const wrap = document.getElementById('binsWrap');
+  wrap.innerHTML = '';
+  const pxPerUnit = 160 / cap;
+
+  bins.forEach((bin, b) => {
+    const col = document.createElement('div');
+    col.className = 'bincol';
+
+    const binDiv = document.createElement('div');
+    binDiv.className = 'bin';
+    binDiv.style.height = (cap * pxPerUnit) + 'px';
+
+    bin.items.forEach(itemIdx => {
+      const size = sizes[itemIdx - 1];
+      const itemDiv = document.createElement('div');
+      itemDiv.className = 'item';
+      itemDiv.style.height = (size * pxPerUnit) + 'px';
+      itemDiv.style.background = colors[(itemIdx - 1) % colors.length];
+      itemDiv.textContent = size;
+      binDiv.appendChild(itemDiv);
+    });
+
+    col.appendChild(binDiv);
+    const label = document.createElement('div');
+    label.className = 'bin-label';
+    label.textContent = `Bin ${b + 1} (${bin.used}/${cap})`;
+    col.appendChild(label);
+    wrap.appendChild(col);
+  });
+}
+
+function randomItems() {
+  const n = Math.floor(Math.random() * 6) + 6;
+  const sizes = Array.from({length: n}, () => Math.floor(Math.random() * 9) + 1);
+  document.getElementById('itemsInput').value = sizes.join(', ');
+  runAlgorithm();
+}
+
+// Run once on load with the default items
+runAlgorithm();
+</script>
+
+</body>
+</html>
